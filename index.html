@@ -946,58 +946,22 @@ function setSyncInd(state, label){
    AI HELPERS — direct Anthropic API
 ═══════════════════════════════════ */
 function callClaude(payload){
-  // Special non-Claude calls that were previously proxied
-  if(payload.type==='meteo'){
-    var wttrUrl='https://wttr.in/'+encodeURIComponent(payload.city)+'?format=j1';
-    return fetch('https://api.allorigins.win/get?url='+encodeURIComponent(wttrUrl))
-      .then(function(r){ return r.json(); })
-      .then(function(d){ return JSON.parse(d.contents||'{}'); });
-  }
-  if(payload.type==='officeholidays'){
-    return fetch('https://api.allorigins.win/get?url='+encodeURIComponent(payload.url))
-      .then(function(r){ return r.json(); })
-      .then(function(d){ return {contents: d.contents||''}; });
-  }
-  // Standard Claude API call
-  return fetch('https://api.anthropic.com/v1/messages',{
+  return fetch('/.netlify/functions/claude',{
     method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
+    headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
   }).then(function(r){ return r.json(); });
 }
 
 function fetchArticle(url){
-  var proxies=[
-    'https://corsproxy.io/?'+encodeURIComponent(url),
-    'https://api.allorigins.win/get?url='+encodeURIComponent(url),
-    'https://thingproxy.freeboard.io/fetch/'+url,
-  ];
-  function tryNext(i){
-    if(i>=proxies.length) return Promise.reject(new Error('All proxies failed'));
-    return fetch(proxies[i])
-      .then(function(r){
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        return r.text();
-      })
-      .then(function(raw){
-        var text=raw;
-        try{ var j=JSON.parse(raw); if(j.contents) text=j.contents; }catch(e){}
-        text=text.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-        console.log('[fetchArticle] proxy '+i+' got '+text.length+' chars for '+url);
-        if(text.length<100) throw new Error('Too short: '+text.length);
-        return text;
-      })
-      .catch(function(e){
-        console.warn('[fetchArticle] proxy '+i+' failed:', e.message);
-        return tryNext(i+1);
-      });
-  }
-  return tryNext(0);
+  return fetch('/.netlify/functions/claude',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'fetch',url:url})
+  }).then(function(r){ return r.text(); })
+  .then(function(html){
+    return html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  });
 }
 
 // Screenshot storage: index -> base64 data
