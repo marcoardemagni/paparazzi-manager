@@ -1,0 +1,184 @@
+ Il volume nell'unit… C non ha etichetta.
+ Numero di serie del volume: ECEF-B84B
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager
+
+01/09/2026  00:34    <DIR>          .
+01/09/2026  00:03    <DIR>          ..
+01/09/2026  00:35                 0 dir.txt
+31/08/2026  23:03           315.385 index.html
+01/09/2026  00:30    <DIR>          netlify
+01/09/2026  00:31                42 netlify.toml
+               3 File        315.427 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git
+
+01/09/2026  00:34    <DIR>          ..
+01/09/2026  00:13                13 COMMIT_EDITMSG
+01/09/2026  00:20               318 config
+01/09/2026  00:11                73 description
+01/09/2026  00:11                23 HEAD
+01/09/2026  00:11    <DIR>          hooks
+01/09/2026  00:12               145 index
+01/09/2026  00:11    <DIR>          info
+01/09/2026  00:13    <DIR>          logs
+01/09/2026  00:13    <DIR>          objects
+01/09/2026  00:20    <DIR>          refs
+               5 File            572 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\hooks
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:11               478 applypatch-msg.sample
+01/09/2026  00:11             1.972 commit-msg.sample
+01/09/2026  00:11             4.611 fsmonitor-watchman.sample
+01/09/2026  00:11               189 post-update.sample
+01/09/2026  00:11               424 pre-applypatch.sample
+01/09/2026  00:11             1.649 pre-commit.sample
+01/09/2026  00:11               416 pre-merge-commit.sample
+01/09/2026  00:11             1.374 pre-push.sample
+01/09/2026  00:11             4.898 pre-rebase.sample
+01/09/2026  00:11               544 pre-receive.sample
+01/09/2026  00:11             1.492 prepare-commit-msg.sample
+01/09/2026  00:11             2.783 push-to-checkout.sample
+01/09/2026  00:11             2.308 sendemail-validate.sample
+01/09/2026  00:11             3.650 update.sample
+              14 File         26.788 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\info
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:11               240 exclude
+               1 File            240 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\logs
+
+01/09/2026  00:13    <DIR>          .
+01/09/2026  00:13               173 HEAD
+01/09/2026  00:20    <DIR>          refs
+               1 File            173 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\logs\refs
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+01/09/2026  00:13    <DIR>          heads
+01/09/2026  00:20    <DIR>          remotes
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\logs\refs\heads
+
+01/09/2026  00:13    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:13               173 master
+               1 File            173 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\logs\refs\remotes
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:20    <DIR>          origin
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\logs\refs\remotes\origin
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:20               157 master
+               1 File            157 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects
+
+01/09/2026  00:13    <DIR>          .
+01/09/2026  00:11    <DIR>          68
+01/09/2026  00:13    <DIR>          77
+01/09/2026  00:12    <DIR>          83
+01/09/2026  00:11    <DIR>          info
+01/09/2026  00:11    <DIR>          pack
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects\68
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+01/09/2026  00:11            92.717 3d6b8dc0639af367c81cdb6993c3f1e70c78dc
+               1 File         92.717 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects\77
+
+01/09/2026  00:13    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+01/09/2026  00:13               129 a857e2a84e456745821cacb2a254b08dc9ee5f
+               1 File            129 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects\83
+
+01/09/2026  00:12    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+01/09/2026  00:12                55 c1aca08a781a8e1362a3f664b011a733a414ee
+               1 File             55 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects\info
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\objects\pack
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:13    <DIR>          ..
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\refs
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:13    <DIR>          heads
+01/09/2026  00:20    <DIR>          remotes
+01/09/2026  00:11    <DIR>          tags
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\refs\heads
+
+01/09/2026  00:13    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:13                41 master
+               1 File             41 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\refs\remotes
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:20    <DIR>          origin
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\refs\remotes\origin
+
+01/09/2026  00:20    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+01/09/2026  00:20                41 master
+               1 File             41 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\.git\refs\tags
+
+01/09/2026  00:11    <DIR>          .
+01/09/2026  00:20    <DIR>          ..
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\netlify
+
+01/09/2026  00:30    <DIR>          .
+01/09/2026  00:34    <DIR>          ..
+01/09/2026  00:34    <DIR>          functions
+               0 File              0 byte
+
+ Directory di C:\Users\marco\OneDrive\Desktop\paparazzi-manager\netlify\functions
+
+01/09/2026  00:34    <DIR>          .
+01/09/2026  00:30    <DIR>          ..
+01/09/2026  00:32             1.805 claude.js
+               1 File          1.805 byte
+
+     Totale file elencati:
+              32 File        438.318 byte
+              58 Directory  267.740.266.496 byte disponibili
