@@ -512,12 +512,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div class="logo">📸 <em>PAPARAZZI!</em> MGR</div>
   <div class="hdr-tabs">
     <button class="htab" id="tabCalendario" onclick="showView('calendario')">Calendario</button>
+    <button class="htab" id="tabOspiti" onclick="showView('ospiti')">Ospiti</button>
+    <button class="htab" id="tabEpisodi" onclick="showView('episodi')">Puntate</button>
     <button class="htab" id="tabLavorazione" onclick="showView('lavorazione')">In lavorazione</button>
     <button class="htab" id="tabSezioni" onclick="showView('sezioni')">Sezioni</button>
-    <button class="htab" id="tabEpisodi" onclick="showView('episodi')">Puntate</button>
     <button class="htab" id="tabGiorno" onclick="showView('giorno')">Giornaliera</button>
     <button class="htab" id="tabDeliverable" onclick="showView('deliverable')">Deliverables</button>
-    <button class="htab" id="tabOspiti" onclick="showView('ospiti')">Ospiti</button>
   </div>
   <div class="hdr-right">
     <span class="hdr-stat" id="hdrStat"></span>
@@ -582,6 +582,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="ep-nav-btn" id="epNext">›</button>
       <button class="day-today-btn" onclick="epGoToNearest()">Vai alle sezioni</button>
       <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="openGeneraProposte()">🤖 Proposte Trending</button>
+      <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="exportSettimanaExcel()">↓ Excel settimana</button>
       <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="newEpisode()">+ Nuova Puntata</button>
     </div>
     <table class="ep-grid" id="epGrid" style="width:100%;border-collapse:collapse"></table>
@@ -792,10 +793,10 @@ const PIPELINE_PROPS_LABELS = {
   standby:'Non serve',richiesto:'Richiesto',extrainfo:'Dare extra info',confermato:'Confermato'
 };
 var TALENTS = [
-  'Sonia Candy','Cinzia Bancone','Michele Casadei Massari','Arianna',
-  'Ilario Lavarra','Francis Alina Ascione','Rosita Dagh','Carlo Fumo'
+  'Sonia Candy','Arianna',
+  'Ilario Lavarra','Francis Alina Ascione','Carlo Fumo'
 ];
-var TEAM_MEMBERS_DEFAULT = ['Arde','Filippo','Cristina','Riccardo','Alfonso','Micaela','Valeria','Elisa','Francesca'];
+var TEAM_MEMBERS_DEFAULT = ['Arde','Filippo','Alfonso','Micaela','Elisa','Eddy','Federica','Enrico','Ale'];
 function getTeamMembers(){ return (S.teamMembers&&S.teamMembers.length)?S.teamMembers:TEAM_MEMBERS_DEFAULT.slice(); }
 var CAL_CATEGORIES = ['Sport, Avventura','Cultura, Letteratura','Cinema, TV, Radio','Teatro e Danza','Musica','Arti figurative','Food','Società','Moda','Tecnologia','Industria, Economia','Turismo, Viaggi','Politica, Istituzioni','Anniversari','Scienza e Natura','Tradizioni','Altro'];
 var CAL_COLORS = {
@@ -3036,6 +3037,99 @@ function renderEpisodeView(){
 }
 
 /* ═══════════════════════════════════
+   EXCEL VISTA SETTIMANALE
+═══════════════════════════════════ */
+function exportSettimanaExcel(){
+  var dates=epWeek; if(!dates||!dates.length){ alert('Nessuna settimana visualizzata.'); return; }
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+  // Build byDate index
+  var byDate={};
+  S.sections.filter(function(s){ return s.assignment&&s.assignment.date; }).forEach(function(s){
+    var iso=s.assignment.date;
+    if(!byDate[iso]) byDate[iso]=[];
+    byDate[iso].push(s);
+  });
+  var isoList=dates.map(function(d){ return dateToIso(d); });
+  isoList.forEach(function(iso){
+    if(byDate[iso]) byDate[iso]=sortSezioniPuntata(byDate[iso]).filter(function(s){ return s.type!=='header'; });
+  });
+
+  var maxSlots=1;
+  isoList.forEach(function(iso){ var n=(byDate[iso]||[]).length; if(n>maxSlots) maxSlots=n; });
+
+  // Build header row
+  var header=['Blocco'];
+  dates.forEach(function(d,i){
+    var iso=isoList[i];
+    var label=DAYS_IT[d.getDay()]+' '+d.getDate()+' '+MONTHS_IT[d.getMonth()];
+    header.push(label);
+  });
+
+  var rows=[header];
+  for(var pos=0;pos<maxSlots;pos++){
+    var row=['B'+(pos+1)];
+    dates.forEach(function(d,i){
+      var iso=isoList[i];
+      var daySecs=byDate[iso]||[];
+      var s=daySecs[pos];
+      if(s){
+        row.push((TYPE_LABELS[s.type]||s.type)+'\n'+(s.title||''));
+      } else {
+        row.push('');
+      }
+    });
+    rows.push(row);
+  }
+
+  // Build XLSX using SheetJS
+  var XLSX=window.XLSX;
+  if(!XLSX){ alert('Libreria Excel non disponibile.'); return; }
+  var ws=XLSX.utils.aoa_to_sheet(rows);
+
+  // Column widths
+  var wscols=[{wch:8}];
+  dates.forEach(function(){ wscols.push({wch:28}); });
+  ws['!cols']=wscols;
+
+  // Row heights
+  var wsrows=[{hpt:20}];
+  for(var r=0;r<maxSlots;r++) wsrows.push({hpt:36});
+  ws['!rows']=wsrows;
+
+  // Style header row
+  var range=XLSX.utils.decode_range(ws['!ref']);
+  for(var C=range.s.c;C<=range.e.c;C++){
+    var cellAddr=XLSX.utils.encode_cell({r:0,c:C});
+    if(!ws[cellAddr]) continue;
+    ws[cellAddr].s={
+      font:{bold:true,color:{rgb:'FFFFFF'}},
+      fill:{fgColor:{rgb:'1a1a2e'}},
+      alignment:{horizontal:'center',vertical:'center',wrapText:true}
+    };
+  }
+  // Style data cells
+  for(var R=1;R<=maxSlots;R++){
+    for(var C=range.s.c;C<=range.e.c;C++){
+      var cellAddr=XLSX.utils.encode_cell({r:R,c:C});
+      if(!ws[cellAddr]) continue;
+      ws[cellAddr].s={
+        alignment:{vertical:'top',wrapText:true},
+        font:C===0?{bold:true}:{},
+        fill:R%2===0?{fgColor:{rgb:'F5F5F8'}}:{fgColor:{rgb:'FFFFFF'}}
+      };
+    }
+  }
+
+  var wb=XLSX.utils.book_new();
+  var d0=dates[0]; var label=DAYS_IT[d0.getDay()]+' '+d0.getDate()+' '+MONTHS_IT[d0.getMonth()];
+  XLSX.utils.book_append_sheet(wb,ws,'Settimana '+label);
+  var fname='Paparazzi_Settimana_'+isoList[0]+'.xlsx';
+  XLSX.writeFile(wb,fname,{bookType:'xlsx',cellStyles:true});
+}
+
+/* ═══════════════════════════════════
    PANEL OPEN / RENDER
 ═══════════════════════════════════ */
 function newSection(){
@@ -3508,6 +3602,9 @@ function renderPanelBody(sec){
         +'</div>'
         +'<div class="flbl" style="margin-bottom:4px">Nome ospite</div>'
         +'<input class="finput" id="f-osp-nome" value="'+esc(ospDb.nome||'')+'" placeholder="Nome cognome...">'
+        +'<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;margin-top:0.4rem;margin-bottom:0.2rem">'
+        +'<input type="checkbox" id="f-osp-add-directory" checked style="accent-color:var(--acc)">'
+        +'Aggiungi automaticamente all\'anagrafica ospiti (se non già presente)</label>'
         +'<div class="flbl" style="margin-top:0.6rem;margin-bottom:4px">Sottopancia / Qualifica</div>'
         +'<input class="finput" id="f-osp-sotto" value="'+esc(ospDb.sottopancia||'')+'" placeholder="es. Attrice, regista italiana">'
         +'<div class="flbl" style="margin-top:0.6rem;margin-bottom:4px">Bio / Contesto</div>'
@@ -4154,6 +4251,20 @@ function collectForm(){
       if(!sec.esibizione) sec.esibizione={};
       if(esibEn) sec.esibizione.enabled=esibEn.checked;
       collectEsibizioni(sec);
+      // Auto-add to guest directory if checkbox is checked and name is set
+      var addDir=document.getElementById('f-osp-add-directory');
+      if(addDir&&addDir.checked&&oRef.nome&&oRef.nome.trim()){
+        var existing=getOspiti().find(function(g){ return g.nome&&g.nome.trim().toLowerCase()===oRef.nome.trim().toLowerCase(); });
+        if(!existing){
+          var newG=mkOspite();
+          newG.nome=oRef.nome.trim();
+          newG.sottopancia=oRef.sottopancia||'';
+          newG.bio=oRef.bio||'';
+          newG.day=sec.assignment&&sec.assignment.date||'';
+          if(!S.guests) S.guests=[];
+          S.guests.push(newG);
+        }
+      }
     }
   } else {
     if(sec.rvm.needed){
