@@ -3146,10 +3146,27 @@ function exportSettimanaExcel(){
   dates.forEach(function(){ wscols.push({wch:28}); });
   ws['!cols']=wscols;
 
-  // Row heights
-  var wsrows=[{hpt:20}];
-  for(var r=0;r<maxSlots;r++) wsrows.push({hpt:36});
+  // Row heights — compact
+  var wsrows=[{hpt:16}];
+  for(var r=0;r<maxSlots;r++) wsrows.push({hpt:20});
   ws['!rows']=wsrows;
+
+  // Fix cell content: avoid duplicate type/title, add space between
+  var range=XLSX.utils.decode_range(ws['!ref']);
+  for(var R=1;R<=maxSlots;R++){
+    for(var C=1;C<=dates.length;C++){
+      var cellAddr=XLSX.utils.encode_cell({r:R,c:C});
+      if(!ws[cellAddr]) continue;
+      var val=ws[cellAddr].v||'';
+      if(val.indexOf('\n')>-1){
+        var parts=val.split('\n');
+        var tipo=(parts[0]||'').trim().toUpperCase();
+        var titolo=(parts[1]||'').trim().toUpperCase();
+        ws[cellAddr].v = tipo===titolo ? tipo : (tipo+' '+titolo).trim();
+        ws[cellAddr].w = ws[cellAddr].v;
+      }
+    }
+  }
 
   var wb=XLSX.utils.book_new();
   var d0=dates[0]; var label=DAYS_IT[d0.getDay()]+' '+d0.getDate()+' '+MONTHS_IT[d0.getMonth()];
