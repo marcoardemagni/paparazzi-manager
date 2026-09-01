@@ -383,10 +383,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .day-view{display:none}
 .day-nav{display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
 .day-chip{
-  font-family:var(--mono);font-size:0.82rem;font-weight:700;
+  font-family:var(--mono);font-size:0.78rem;font-weight:700;
   background:var(--surf);border:1px solid var(--brd);
-  padding:0.3rem 1.2rem;border-radius:5px;color:var(--text);
-  min-width:240px;text-align:center;letter-spacing:0.3px;
+  padding:0.3rem 0.7rem;border-radius:5px;color:var(--text);
+  min-width:160px;text-align:center;letter-spacing:0.3px;
 }
 .day-chip.today{border-color:var(--acc);color:var(--acc)}
 .day-today-btn{
@@ -700,7 +700,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <option value="date">Ordina per data</option>
         <option value="rilevanza">Ordina per rilevanza</option>
       </select>
-      <select class="fselect" id="calMinRil" onchange="renderCalendario()" style="font-size:0.78rem;padding:0.2rem 0.5rem;max-width:110px">
+      <select class="fselect" id="calMinRil" onchange="renderCalendario()" style="font-size:0.78rem;padding:0.2rem 0.5rem;max-width:80px">
         <option value="1">Tutte ★</option>
         <option value="3">★ ≥ 3</option>
         <option value="5">★ ≥ 5</option>
@@ -708,10 +708,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <option value="8">★ ≥ 8</option>
       </select>
       <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem;margin-left:0.5rem" onclick="exportCalendarioExcel()">↓ Excel</button>
-      <label class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem;cursor:pointer" title="Importa righe da Excel">↑ Excel<input type="file" id="calExcelFile" accept=".xlsx,.xls,.csv" style="display:none"></label>
+      <div style="position:relative;display:inline-block" id="calImportMenu">
+        <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="toggleCalImportMenu()">↑ Import ▾</button>
+        <div id="calImportDropdown" style="display:none;position:absolute;right:0;top:110%;background:var(--surf);border:1px solid var(--brd);border-radius:6px;z-index:999;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.3)">
+          <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;cursor:pointer;font-size:0.8rem;white-space:nowrap" onmouseenter="this.style.background='var(--surfl)'" onmouseleave="this.style.background=''">
+            📊 Da Excel<input type="file" id="calExcelFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="toggleCalImportMenu()">
+          </label>
+          <label style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;cursor:pointer;font-size:0.8rem;white-space:nowrap" onmouseenter="this.style.background='var(--surfl)'" onmouseleave="this.style.background=''">
+            📅 Da file .ics<input type="file" id="icsFile" accept=".ics" style="display:none" onchange="toggleCalImportMenu()">
+          </label>
+          <div style="padding:0.5rem 0.8rem;cursor:pointer;font-size:0.8rem;white-space:nowrap" onmouseenter="this.style.background='var(--surfl)'" onmouseleave="this.style.background=''" onclick="toggleCalImportMenu();importIcsFromUrl()">🔗 Da URL / OfficeholidAYS</div>
+        </div>
+      </div>
       <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="newCalEvent()">+ Nuovo evento</button>
-      <label class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem;cursor:pointer" title="Importa file .ics">📅 Import .ics<input type="file" id="icsFile" accept=".ics" style="display:none"></label>
-      <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="importIcsFromUrl()" title="Importa da URL webcal/ics">🔗 Import da URL</button>
     </div>
     <div id="calGrid"></div>
   </div>
@@ -3098,35 +3107,11 @@ function exportSettimanaExcel(){
   for(var r=0;r<maxSlots;r++) wsrows.push({hpt:36});
   ws['!rows']=wsrows;
 
-  // Style header row
-  var range=XLSX.utils.decode_range(ws['!ref']);
-  for(var C=range.s.c;C<=range.e.c;C++){
-    var cellAddr=XLSX.utils.encode_cell({r:0,c:C});
-    if(!ws[cellAddr]) continue;
-    ws[cellAddr].s={
-      font:{bold:true,color:{rgb:'FFFFFF'}},
-      fill:{fgColor:{rgb:'1a1a2e'}},
-      alignment:{horizontal:'center',vertical:'center',wrapText:true}
-    };
-  }
-  // Style data cells
-  for(var R=1;R<=maxSlots;R++){
-    for(var C=range.s.c;C<=range.e.c;C++){
-      var cellAddr=XLSX.utils.encode_cell({r:R,c:C});
-      if(!ws[cellAddr]) continue;
-      ws[cellAddr].s={
-        alignment:{vertical:'top',wrapText:true},
-        font:C===0?{bold:true}:{},
-        fill:R%2===0?{fgColor:{rgb:'F5F5F8'}}:{fgColor:{rgb:'FFFFFF'}}
-      };
-    }
-  }
-
   var wb=XLSX.utils.book_new();
   var d0=dates[0]; var label=DAYS_IT[d0.getDay()]+' '+d0.getDate()+' '+MONTHS_IT[d0.getMonth()];
   XLSX.utils.book_append_sheet(wb,ws,'Settimana '+label);
   var fname='Paparazzi_Settimana_'+isoList[0]+'.xlsx';
-  XLSX.writeFile(wb,fname,{bookType:'xlsx',cellStyles:true});
+  XLSX.writeFile(wb,fname);
 }
 
 /* ═══════════════════════════════════
@@ -4660,8 +4645,12 @@ function renderCalendario(){
 
   // Upcoming list
   if(upcoming.length){
-    h+='<div style="font-weight:700;font-size:0.82rem;letter-spacing:0.04em;margin-bottom:0.5rem;opacity:0.7">PROSSIMI EVENTI</div>';
-    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.4rem">';
+    h+='<div style="margin-top:1rem">'
+      +'<div onclick="toggleUpcoming()" style="cursor:pointer;display:flex;align-items:center;gap:0.5rem;font-weight:700;font-size:0.82rem;letter-spacing:0.04em;opacity:0.7;user-select:none">'
+      +'<span id="upcomingArrow">▶</span> PROSSIMI EVENTI ('+upcoming.length+')'
+      +'</div>'
+      +'<div id="upcomingList" style="display:none;margin-top:0.5rem;display:none">'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.4rem">';
     upcoming.forEach(function(item){
       var ev=item.ev;
       var col=CAL_COLORS[ev.categoria]||'#555';
@@ -4680,10 +4669,19 @@ function renderCalendario(){
           })():'')
         +'</div>';
     });
-    h+='</div>';
+    h+='</div></div></div>';
   }
 
   document.getElementById('calGrid').innerHTML=h;
+}
+
+function toggleUpcoming(){
+  var list=document.getElementById('upcomingList');
+  var arrow=document.getElementById('upcomingArrow');
+  if(!list) return;
+  var open=list.style.display==='block';
+  list.style.display=open?'none':'block';
+  if(arrow) arrow.textContent=open?'▶':'▼';
 }
 
 function openCalEvent(id){
@@ -5781,6 +5779,23 @@ function importIcs(text){
   if(parsed.length&&parsed[0].dateStart) calWeek=calMondayOf(parsed[0].dateStart);
   renderCalendario();
   alert('Importati '+added+' eventi'+(skipped?' ('+skipped+' già presenti, saltati)':'')+'.');
+}
+
+function toggleCalImportMenu(){
+  var dd=document.getElementById('calImportDropdown');
+  if(!dd) return;
+  var open=dd.style.display==='block';
+  dd.style.display=open?'none':'block';
+  if(!open){
+    setTimeout(function(){
+      document.addEventListener('click',function closeMenu(e){
+        if(!document.getElementById('calImportMenu').contains(e.target)){
+          dd.style.display='none';
+          document.removeEventListener('click',closeMenu);
+        }
+      });
+    },0);
+  }
 }
 
 function importIcsFromUrl(){
