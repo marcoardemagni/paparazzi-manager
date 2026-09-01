@@ -869,7 +869,8 @@ function mkSection(){
     script:{status:'standby',notes:''},
     info:'',
     assignment:null, // {date:'YYYY-MM-DD', blocco:1}
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    updatedAt: Date.now()
   };
 }
 
@@ -1005,6 +1006,19 @@ function cloudSave(){
   var db=getFirestore(); if(!db) return;
   setSyncInd('busy','salvo\u2026');
   var ts=Date.now();
+
+  // Stamp updatedAt on every element being saved
+  ['sections','calEvents','guests'].forEach(function(key){
+    if(S[key]&&Array.isArray(S[key])){
+      S[key].forEach(function(item){ if(!item.updatedAt) item.updatedAt=ts; });
+    }
+  });
+  // Also stamp elements modified right now
+  if(editingId){
+    var sec=S.sections&&S.sections.find(function(s){ return s.id===editingId; });
+    if(sec) sec.updatedAt=ts;
+  }
+
   var keys=Object.keys(FIRESTORE_DOCS);
   var done=0; var errs=0;
 
@@ -1013,13 +1027,43 @@ function cloudSave(){
     var colRef=db.collection(path[0]);
     var docRef=colRef.doc(path[1]);
 
-    // Use a transaction: read the latest from Firestore first,
-    // then merge our local key into it — so concurrent saves never overwrite each other.
     db.runTransaction(function(tx){
       return tx.get(docRef).then(function(snap){
         var existing = snap.exists ? (snap.data()||{}) : {};
         var merged = Object.assign({}, existing);
-        merged[key] = S[key] || [];
+
+        var remoteArr = existing[key] || [];
+        var localArr  = S[key] || [];
+
+        if(Array.isArray(remoteArr) && Array.isArray(localArr)){
+          // Build map of remote items by id
+          var remoteMap = {};
+          remoteArr.forEach(function(item){ if(item&&item.id) remoteMap[item.id]=item; });
+
+          // For each local item: if newer than remote → use local, else keep remote
+          var localMap = {};
+          localArr.forEach(function(item){
+            if(!item||!item.id) return;
+            localMap[item.id]=item;
+            var remote=remoteMap[item.id];
+            if(!remote || (item.updatedAt||0) >= (remote.updatedAt||0)){
+              remoteMap[item.id]=item; // local wins
+            }
+            // else remote is newer → keep remote (already in remoteMap)
+          });
+
+          // Add remote-only items (added by other users, not in local)
+          remoteArr.forEach(function(item){
+            if(item&&item.id&&!localMap[item.id]){
+              remoteMap[item.id]=item; // keep remote-only item
+            }
+          });
+
+          merged[key] = Object.values(remoteMap);
+        } else {
+          merged[key] = localArr;
+        }
+
         merged.updatedAt = ts;
         tx.set(docRef, merged);
       });
@@ -4282,6 +4326,7 @@ function saveAndClose(){
     if(elAssigned&&elAssigned.checked){
       if(!sec.assignment) sec.assignment={ordine:0};
       sec.assignment.date=sec.plan.dataPreferita;
+  sec.updatedAt=Date.now();
     } else if(elAssigned&&!elAssigned.checked){
       sec.assignment=null;
     }
@@ -4527,7 +4572,8 @@ function mkCalEvent(){
     id:'cal-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
     title:'',categoria:'Sport, Avventura',dateStart:'',dateEnd:'',
     luogo:'',responsabile:'Arde',rilevanza:5,note:'',fonte:'',
-    trattato:false,trattatoData:'',trattatoEpNum:''
+    trattato:false,trattatoData:'',trattatoEpNum:'',
+    updatedAt: Date.now()
   };
 }
 function weekdaysBetween2(startIso, endIso){
@@ -5226,7 +5272,8 @@ function mkOspite(){
     // G — Extra
     extra:'',
     // H — Contatti
-    telefono:'', email:'', secNome:'', secTelefono:'', secEmail:''
+    telefono:'', email:'', secNome:'', secTelefono:'', secEmail:'',
+    updatedAt: Date.now()
   };
 }
 
