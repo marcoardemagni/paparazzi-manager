@@ -1386,31 +1386,45 @@ function copyIntestazione(headerId){
   setTimeout(function(){ btn.textContent=orig; btn.style.background=''; },2000);
 }
 function calcNextEpisode(){
-  // Reference: puntata 118 = 2026-03-11 (Wednesday)
-  var REF_DATE = new Date(2026, 8, 14); // month is 0-indexed — 14 settembre 2026 = pt. 1
+  var REF_DATE = new Date(2026, 8, 14); // 14 settembre 2026 = pt. 1
   var REF_NUM  = 1;
-  // Get all dates already in use
+
+  // Get all dates already used and their episode numbers
   var usedDates = {};
-  S.sections.forEach(function(s){ if(s.assignment&&s.assignment.date) usedDates[s.assignment.date]=true; });
+  var maxNum = 0;
+  S.sections.forEach(function(s){
+    if(s.assignment&&s.assignment.date){
+      usedDates[s.assignment.date]=true;
+      var n=parseInt(s.assignment.epNum||0);
+      if(n>maxNum) maxNum=n;
+    }
+  });
+
   // Find next weekday not already used
   var d = new Date();
-  // Start from today or day after last used date, whichever is later
   var maxUsed = Object.keys(usedDates).sort().pop();
   if(maxUsed){
     var mu = new Date(maxUsed+'T12:00:00');
     mu.setDate(mu.getDate()+1);
     if(mu > d) d = mu;
   }
-  // Skip weekends
   while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1);
-  // Count weekdays between REF_DATE and d
-  function weekdaysBetween(a, b){
-    var count=0; var cur=new Date(a);
-    while(cur < b){ cur.setDate(cur.getDate()+1); var wd=cur.getDay(); if(wd!==0&&wd!==6) count++; }
-    return count;
-  }
-  var num = REF_NUM + weekdaysBetween(REF_DATE, d);
+
   var iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+
+  // Use max existing num + 1, fallback to weekday math
+  var num;
+  if(maxNum>0){
+    num = maxNum+1;
+  } else {
+    function weekdaysBetween(a, b){
+      var count=0; var cur=new Date(a);
+      while(cur < b){ cur.setDate(cur.getDate()+1); var wd=cur.getDay(); if(wd!==0&&wd!==6) count++; }
+      return count;
+    }
+    num = REF_NUM + weekdaysBetween(REF_DATE, d);
+  }
+
   return {date: iso, num: num};
 }
 
@@ -1437,10 +1451,22 @@ function newEpisode(){
   document.getElementById('ep-date-inp').addEventListener('input', function(){
     var v=this.value;
     if(!v.match(/^\d{4}-\d{2}-\d{2}$/)) return;
-    var REF_DATE=new Date(2026,8,14); var REF_NUM=1;
-    var d=new Date(v+'T12:00:00');
-    function weekdaysBetween(a,b){ var count=0; var cur=new Date(a); while(cur<b){ cur.setDate(cur.getDate()+1); var wd=cur.getDay(); if(wd!==0&&wd!==6) count++; } return count; }
-    document.getElementById('ep-num-inp').value = REF_NUM + weekdaysBetween(REF_DATE, d);
+    // Find max existing epNum and its date
+    var maxNum=0; var maxDate='';
+    S.sections.forEach(function(s){
+      if(s.assignment&&s.assignment.date){
+        var n=parseInt(s.assignment.epNum||0);
+        if(n>maxNum||(n===maxNum&&s.assignment.date>maxDate)){ maxNum=n; maxDate=s.assignment.date; }
+      }
+    });
+    if(maxNum>0&&maxDate){
+      // Count weekdays between maxDate and chosen date
+      var a=new Date(maxDate+'T12:00:00');
+      var b=new Date(v+'T12:00:00');
+      var count=0; var cur=new Date(a);
+      while(cur<b){ cur.setDate(cur.getDate()+1); var wd=cur.getDay(); if(wd!==0&&wd!==6) count++; }
+      document.getElementById('ep-num-inp').value=maxNum+count;
+    }
   });
   document.getElementById('ep-cancel-btn').onclick=function(){ document.body.removeChild(overlay); };
   document.getElementById('ep-confirm-btn').onclick=function(){
