@@ -1043,6 +1043,8 @@ function cloudSave(){
         var localArr  = S[key] || [];
 
         if(Array.isArray(remoteArr) && Array.isArray(localArr)){
+          var deletedIds=S.deletedIds||[];
+
           // Build map of remote items by id
           var remoteMap = {};
           remoteArr.forEach(function(item){ if(item&&item.id) remoteMap[item.id]=item; });
@@ -1054,19 +1056,23 @@ function cloudSave(){
             localMap[item.id]=item;
             var remote=remoteMap[item.id];
             if(!remote || (item.updatedAt||0) >= (remote.updatedAt||0)){
-              remoteMap[item.id]=item; // local wins
+              remoteMap[item.id]=item;
             }
-            // else remote is newer → keep remote (already in remoteMap)
           });
 
-          // Add remote-only items (added by other users, not in local)
+          // Add remote-only items UNLESS they were deleted locally
           remoteArr.forEach(function(item){
-            if(item&&item.id&&!localMap[item.id]){
-              remoteMap[item.id]=item; // keep remote-only item
+            if(item&&item.id&&!localMap[item.id]&&!deletedIds.includes(item.id)){
+              remoteMap[item.id]=item;
             }
           });
+
+          // Remove deleted items from merged result
+          deletedIds.forEach(function(id){ delete remoteMap[id]; });
 
           merged[key] = Object.values(remoteMap);
+        // Persist deletedIds so other clients also know what was deleted
+        merged.deletedIds = Array.from(new Set((existing.deletedIds||[]).concat(S.deletedIds||[])));
         } else {
           merged[key] = localArr;
         }
@@ -1104,8 +1110,9 @@ function cloudLoad(force, callback){
         if(doc.exists){
           var d=doc.data();
           if(d[key]!==undefined){
-            S[key]=d[key]; anyData=true; 
+            S[key]=d[key]; anyData=true;
           }
+          if(d.deletedIds) S.deletedIds=Array.from(new Set((S.deletedIds||[]).concat(d.deletedIds)));
         }
         done++;
         if(done===keys.length){
@@ -1709,6 +1716,8 @@ function deletePuntata(){
   var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
   if(!secs.length){ alert('Nessun blocco da eliminare per questa puntata.'); return; }
   if(!confirm('Eliminare tutti i '+secs.length+' blocchi della puntata del '+iso+'?\nQuesta operazione non è reversibile.')) return;
+  if(!S.deletedIds) S.deletedIds=[];
+  secs.forEach(function(s){ S.deletedIds.push(s.id); });
   S.sections=S.sections.filter(function(s){ return !(s.assignment&&s.assignment.date===iso); });
   save();
   closeVistaPuntata();
@@ -4386,6 +4395,8 @@ function closePanel(){ document.getElementById('overlay').classList.remove('open
 function deleteSection(){
   if(!editingId) return;
   if(!confirm('Eliminare questa sezione?')) return;
+  if(!S.deletedIds) S.deletedIds=[];
+  S.deletedIds.push(editingId);
   S.sections=S.sections.filter(s=>s.id!==editingId);
   save(); document.getElementById('overlay').classList.remove('open'); editingId=null; render();
 }
