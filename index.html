@@ -382,7 +382,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 /* ── DAILY VIEW ── */
 .day-view{display:none}
 .day-nav{display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
-.day-chip{
+.flt-btn{font-family:var(--mono);font-size:0.7rem;padding:0.25rem 0.6rem;border-radius:4px;border:1px solid var(--brd);background:var(--bg2);color:var(--text2);cursor:pointer;transition:all 0.15s}
+.flt-btn.active{background:var(--acc);color:#fff;border-color:var(--acc)}
   font-family:var(--mono);font-size:0.78rem;font-weight:700;
   background:var(--surf);border:1px solid var(--brd);
   padding:0.3rem 0.7rem;border-radius:5px;color:var(--text);
@@ -561,6 +562,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 <div class="main">
   <!-- SEZIONI VIEW -->
   <div id="viewSezioni">
+    <div style="display:flex;align-items:center;gap:0.5rem;padding:0.6rem 1rem;border-bottom:1px solid var(--brd);flex-wrap:wrap">
+      <div style="font-size:0.75rem;color:var(--text3);font-family:var(--mono)">MOSTRA:</div>
+      <button class="flt-btn active" id="fltBtnDefault" onclick="setSezFilter('default')">Trending · Hot Stuff · Bandierina · Domandone · Ospite</button>
+      <button class="flt-btn" id="fltBtnTwo" onclick="setSezFilter('two')">Solo Trending &amp; Hot Stuff</button>
+      <button class="flt-btn" id="fltBtnAll" onclick="setSezFilter('all')">Tutte</button>
+    </div>
     <div class="section-grid" id="sectionGrid"></div>
   </div>
 
@@ -1219,6 +1226,17 @@ function elemColor(st){
 /* ═══════════════════════════════════
    FILTERS
 ═══════════════════════════════════ */
+var sezFilter='default'; // 'default' | 'two' | 'all'
+
+function setSezFilter(val){
+  sezFilter=val;
+  ['default','two','all'].forEach(function(v){
+    var b=document.getElementById('fltBtn'+v.charAt(0).toUpperCase()+v.slice(1));
+    if(b) b.classList.toggle('active', v===val);
+  });
+  renderSections();
+}
+
 function setFilter(key,val){
   filters[key]=val;
   document.querySelectorAll(key==='type'?'[data-filter-type]':'[data-filter-st]').forEach(b=>{
@@ -1229,7 +1247,15 @@ function setFilter(key,val){
 
 function filteredSections(){
   const q=document.getElementById('fsearch').value.trim().toLowerCase();
+  // Types shown by sezFilter
+  var defaultTypes=['trending','hotstuff','bandierina','domandone','ospite'];
+  var twoTypes=['trending','hotstuff'];
+
   return S.sections.filter(sec=>{
+    // Apply sezFilter
+    if(sezFilter==='default' && !defaultTypes.includes(sec.type)) return false;
+    if(sezFilter==='two' && !twoTypes.includes(sec.type)) return false;
+    // existing type/status filters still apply on top
     if(filters.type!=='all'){
       if(filters.type==='altre'){
         if(['trending','hotstuff','ospite','bandierina','headlines'].includes(sec.type)) return false;
@@ -3162,7 +3188,9 @@ function exportSettimanaExcel(){
         var parts=val.split('\n');
         var tipo=(parts[0]||'').trim().toUpperCase();
         var titolo=(parts[1]||'').trim().toUpperCase();
-        ws[cellAddr].v = tipo===titolo ? tipo : (tipo+' '+titolo).trim();
+        // Remove type prefix from title if it starts with it
+        if(titolo.indexOf(tipo)===0) titolo=titolo.slice(tipo.length).trim();
+        ws[cellAddr].v = titolo ? tipo+' '+titolo : tipo;
         ws[cellAddr].w = ws[cellAddr].v;
       }
     }
