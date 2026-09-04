@@ -567,6 +567,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="flt-btn active" id="fltBtnDefault" onclick="setSezFilter('default')">Trending · Hot Stuff · Bandierina · Domandone · Ospite</button>
       <button class="flt-btn" id="fltBtnTwo" onclick="setSezFilter('two')">Solo Trending &amp; Hot Stuff</button>
       <button class="flt-btn" id="fltBtnAll" onclick="setSezFilter('all')">Tutte</button>
+      <select class="fselect" id="fltAssignment" onchange="renderSections()" style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-left:0.5rem">
+        <option value="all">Tutte le sezioni</option>
+        <option value="unassigned">Solo non assegnate</option>
+        <option value="assigned">Solo assegnate</option>
+      </select>
     </div>
     <div class="section-grid" id="sectionGrid"></div>
   </div>
@@ -1263,6 +1268,10 @@ function filteredSections(){
     if(sezFilter==='default' && !defaultTypes.includes(sec.type)) return false;
     if(sezFilter==='two' && !twoTypes.includes(sec.type)) return false;
     // existing type/status filters still apply on top
+    var assignmentFilter=document.getElementById('fltAssignment');
+    var assignVal=assignmentFilter?assignmentFilter.value:'all';
+    if(assignVal==='unassigned' && sec.assignment&&sec.assignment.date) return false;
+    if(assignVal==='assigned' && (!sec.assignment||!sec.assignment.date)) return false;
     if(filters.type!=='all'){
       if(filters.type==='altre'){
         if(['trending','hotstuff','ospite','bandierina','headlines'].includes(sec.type)) return false;
@@ -4874,7 +4883,10 @@ function showCalModal(ev, isNew){
     +'<div style="padding:0.6rem;background:var(--bg3);border-radius:6px;margin-bottom:1rem">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">'
     +'<div style="font-family:var(--mono);font-size:0.7rem;font-weight:700;letter-spacing:0.5px;color:var(--text2);text-transform:uppercase">Aggiungi in puntata</div>'
-    +'<button class="btn btn-primary" id="cev-aggiungi-btn" style="font-size:0.72rem;padding:0.2rem 0.7rem" onclick="aggiungiInPuntata(this)">➕ Aggiungi</button>'
+    +'<div style="display:flex;gap:0.5rem">'
+    +'<button class="btn btn-primary" id="cev-aggiungi-btn" style="font-size:0.72rem;padding:0.2rem 0.7rem" onclick="aggiungiInPuntata(this)">➕ Aggiungi in puntata</button>'
+    +'<button class="btn" style="font-size:0.72rem;padding:0.2rem 0.7rem;background:var(--bg3)" onclick="creaSezioneLibera(this)" title="Crea sezione senza assegnarla a nessuna puntata">📋 Crea sezione</button>'
+    +'</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">'
     +'<div><div class="flbl">Tipo sezione</div><select class="fselect" id="cev-sec-type">'+typeOpts+'</select></div>'
@@ -5012,6 +5024,39 @@ function aggiungiInPuntata(btn){
     btn.textContent='✓ Aggiunto';
   }
 }
+function creaSezioneLibera(btn){
+  var tipo=document.getElementById('cev-sec-type').value;
+  var title=(document.getElementById('cev-title').value||'').trim();
+  var fonte=document.getElementById('cev-fonte').value||'';
+  var note=document.getElementById('cev-note').value||'';
+  var responsabile=document.getElementById('cev-resp').value||'';
+  var rilevanza=parseInt(document.getElementById('cev-ril').value)||5;
+  var luogo=document.getElementById('cev-luogo').value||'';
+  var categoria=document.getElementById('cev-cat').value||'';
+
+  if(!title){ alert('Inserisci un titolo prima di creare la sezione.'); return; }
+
+  var sec=mkSection();
+  sec.title=title.toUpperCase();
+  sec.type=tipo;
+  sec.fonte=fonte;
+  sec.note=note;
+  sec.responsabile=responsabile;
+  if(!sec.plan) sec.plan={};
+  sec.plan.rilevanza=rilevanza;
+  if(luogo) sec.info='Luogo: '+luogo+(categoria?' | Categoria: '+categoria:'');
+  sec.assignment=null;
+  sec.updatedAt=Date.now();
+
+  S.sections.push(sec);
+  save();
+  render();
+
+  var fb=document.getElementById('cev-aggiungi-feedback');
+  if(fb){ fb.textContent='✓ Sezione "'+title+'" creata (in lavorazione, senza puntata)'; fb.style.display='block'; }
+  if(btn){ btn.disabled=true; btn.textContent='✓ Creata'; }
+}
+
 function addTeamMember(){
   var name=prompt('Nome del nuovo membro:','');
   if(!name||!name.trim()) return;
@@ -5622,6 +5667,7 @@ function showOspiteModal(g, isNew){
     +(!isNew?'<button class="btn" style="background:#c0392b;color:#fff" id="osp-del-btn">Elimina</button>':'<div></div>')
     +'<div style="display:flex;gap:0.5rem">'
     +'<button class="btn" style="background:var(--bg3)" id="osp-cancel-btn">Annulla</button>'
+    +(!isNew?'<button class="btn" style="background:var(--bg3)" id="osp-add-puntata-btn">➕ Aggiungi in puntata</button>':'')
     +'<button class="btn btn-primary" id="osp-save-btn">Salva</button>'
     +'</div></div>'
     +'</div>';
@@ -5690,7 +5736,62 @@ function showOspiteModal(g, isNew){
       S.guests=S.guests.filter(function(x){ return x.id!==g.id; });
       save(); document.body.removeChild(overlay); renderOspiti();
     };
+    var addPunBtn=overlay.querySelector('#osp-add-puntata-btn');
+    if(addPunBtn) addPunBtn.onclick=function(){ aggiungiOspiteInPuntata(g, overlay); };
   }
+}
+
+function aggiungiOspiteInPuntata(g, overlay){
+  // Build episode date options
+  var epDates={};
+  S.sections.forEach(function(s){ if(s.assignment&&s.assignment.date) epDates[s.assignment.date]=s.assignment.epNum||''; });
+  var epDateKeys=Object.keys(epDates).sort();
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var epOpts='<option value="">— nessuna puntata (lascia in lavorazione) —</option>'+epDateKeys.map(function(d){
+    var nd=new Date(d+'T12:00:00');
+    return '<option value="'+d+'">'+DAYS_IT[nd.getDay()]+' '+nd.getDate()+' '+MONTHS_IT[nd.getMonth()]+' '+nd.getFullYear()+'</option>';
+  }).join('');
+
+  var panel=document.createElement('div');
+  panel.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+  panel.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;min-width:340px;max-width:420px">'
+    +'<div style="font-weight:700;font-size:1rem;margin-bottom:1rem">Aggiungi '+esc(g.nome||'ospite')+' in puntata</div>'
+    +'<div class="flbl" style="margin-bottom:4px">Data puntata</div>'
+    +'<select class="fselect" id="osp-ep-date" style="margin-bottom:0.8rem">'+epOpts+'</select>'
+    +'<div id="osp-add-feedback" style="font-size:0.78rem;color:#4ade80;margin-bottom:0.5rem;display:none"></div>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
+    +'<button class="btn btn-primary" id="osp-confirm-add">Aggiungi</button>'
+    +'</div></div>';
+  document.body.appendChild(panel);
+
+  panel.querySelector('#osp-confirm-add').onclick=function(){
+    var epDate=panel.querySelector('#osp-ep-date').value;
+    var sec=mkSection();
+    sec.type='ospite';
+    sec.title=g.nome||'Ospite';
+    sec.updatedAt=Date.now();
+    if(!sec.script) sec.script={};
+    sec.script.ospiteRef={
+      nome:g.nome||'',
+      sottopancia:g.sottopancia||'',
+      bio:g.bio||'',
+      motivo:'',
+      url:''
+    };
+    if(epDate){
+      var sibling=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===epDate; });
+      var maxBlocco=sibling.reduce(function(m,s){ return Math.max(m,s.assignment&&s.assignment.blocco||0); },0);
+      sec.assignment={date:epDate, blocco:maxBlocco+1, epNum:epDates[epDate]||''};
+    }
+    S.sections.push(sec);
+    save();
+    var fb=panel.querySelector('#osp-add-feedback');
+    if(fb){ fb.textContent='✓ Sezione ospite creata'+(epDate?' per il '+epDate:' (in lavorazione)'); fb.style.display='block'; }
+    panel.querySelector('#osp-confirm-add').disabled=true;
+    setTimeout(function(){ panel.remove(); }, 1200);
+  };
 }
 function ospSyncProdDay(){
   var dayEl=document.getElementById('osp-day');
