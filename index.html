@@ -572,10 +572,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="flt-btn active" id="fltBtnDefault" onclick="setSezFilter('default')">Trending · Hot Stuff · Bandierina · Domandone · Ospite</button>
       <button class="flt-btn" id="fltBtnTwo" onclick="setSezFilter('two')">Solo Trending &amp; Hot Stuff</button>
       <button class="flt-btn" id="fltBtnAll" onclick="setSezFilter('all')">Tutte</button>
-      <select class="fselect" id="fltAssignment" onchange="renderSections()" style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-left:0.5rem">
-        <option value="all">Tutte le sezioni</option>
-        <option value="unassigned">Solo non assegnate</option>
-        <option value="assigned">Solo assegnate</option>
+      <select class="fselect" id="fltAssignment" onchange="renderSections()" style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-left:0.5rem;max-width:200px">
+        <option value="unassigned" selected>Non inserite in puntata</option>
+        <option value="assigned">Inserite in puntata</option>
+        <option value="all">Tutte</option>
       </select>
     </div>
     <div class="section-grid" id="sectionGrid"></div>
@@ -1359,7 +1359,7 @@ function renderSections(){
     return `<div class="sec-card ${st}" onclick="openSection('${sec.id}')">
       <div style="background:${tc.bg};color:${tc.color};font-family:var(--mono);font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:3px;white-space:nowrap;flex-shrink:0">${TYPE_LABELS[sec.type]||sec.type}</div>
       <div style="font-weight:600;font-size:0.85rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sec.title||'<em style="color:var(--text3);font-weight:400">Senza titolo</em>'}</div>
-      ${sec.responsabile?`<div style="font-size:0.72rem;color:var(--text3);white-space:nowrap;flex-shrink:0">👤 ${sec.responsabile}</div>`:''}
+      ${sec.responsabile?`<div style="font-size:0.7rem;color:#ffffff;white-space:nowrap;flex-shrink:0;font-family:var(--mono);font-weight:700;letter-spacing:0.5px">${sec.responsabile.toUpperCase()}</div>`:''}
       <div style="font-size:0.7rem;color:var(--text3);white-space:nowrap;flex-shrink:0">${assignStr}</div>
       ${checks}
     </div>`;
@@ -3650,20 +3650,8 @@ function renderPanelBody(sec){
     // Pianificazione block (trending + hotstuff only)
     if(sec.type==='trending'||sec.type==='hotstuff'){
       var plan=sec.plan||{};
-      var isAssigned=sec.assignment&&sec.assignment.date?true:false;
-      var assignedDate=sec.assignment&&sec.assignment.date||plan.dataPreferita||'';
       h+=sdiv('Pianificazione');
       h+='<div class="rvm-block">'
-        +'<div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:0.6rem 0.8rem;margin-bottom:0.7rem">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">'
-        +'<div class="flbl" style="margin:0">Data preferita</div>'
-        +'<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.8rem;cursor:pointer">'
-        +'<input type="checkbox" id="f-plan-assigned" '+(isAssigned?'checked':'')+' style="cursor:pointer;accent-color:var(--acc)" onchange="togglePlanAssigned(this.checked)">'
-        +'<span style="color:var(--acc);font-weight:600">Assegnato alla puntata qui indicata</span>'
-        +'</label>'
-        +'</div>'
-        +'<input class="finput" type="date" id="f-plan-pref" value="'+esc(assignedDate)+'" oninput="onPlanPrefChange(this.value)">'
-        +'</div>'
         +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.5rem">'
         +'<div><div class="flbl" style="font-size:0.65rem;margin-bottom:2px">Prima data utile</div>'
         +'<input class="finput" type="date" id="f-plan-prima" value="'+esc(plan.primaData||'')+'"></div>'
