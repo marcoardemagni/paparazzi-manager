@@ -91,7 +91,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .main{padding:1rem 1.2rem;min-height:calc(100vh - 120px)}
 
 /* ── SECTION CARDS ── */
-.section-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0.75rem}
+.section-grid{display:flex;flex-direction:column;gap:0.35rem;padding:0.5rem 1rem}
 .osp-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--brd);border-radius:8px;overflow:hidden}
 .osp-row{display:grid;grid-template-columns:140px 1fr 110px 90px 90px 90px;gap:0.7rem;align-items:center;padding:0.45rem 0.8rem;background:var(--bg2);cursor:pointer;border-bottom:1px solid var(--brd);font-size:0.82rem;transition:background 0.1s}
 .osp-row:last-child{border-bottom:none}
@@ -107,14 +107,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   .osp-modal-cols{grid-template-columns:1fr !important}
 }
 .sec-card{
-  background:var(--surf);border:1px solid var(--brd);border-radius:8px;
+  background:var(--surf);border:1px solid var(--brd);border-radius:6px;
   cursor:pointer;transition:all 0.15s;overflow:hidden;
   border-left:3px solid var(--brd);
+  display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.7rem;
 }
 .sec-card:hover{border-color:var(--brd2);border-left-color:var(--acc);background:var(--surfl)}
 .sec-card.assigned{border-left-color:var(--s-dialogato)}
 .sec-card.standby{border-left-color:var(--s-standby)}
 .sec-card.done{border-left-color:#f0c030}
+.prod-checks{display:flex;align-items:center;gap:0.4rem;flex-shrink:0;margin-left:auto}
+.prod-check{display:flex;align-items:center;gap:0.2rem;font-size:0.62rem;white-space:nowrap;color:var(--text3)}
+.prod-check.active{color:var(--text)}
+.prod-check input[type=checkbox]{accent-color:var(--acc);pointer-events:none;width:12px;height:12px}
 
 .sc-head{padding:0.7rem 0.9rem;display:flex;align-items:flex-start;gap:0.6rem}
 .sc-type-badge{
@@ -882,7 +887,8 @@ function mkSection(){
     info:'',
     assignment:null, // {date:'YYYY-MM-DD', blocco:1}
     createdAt: new Date().toISOString(),
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    prodStatus: { fattibile: false, dataRicezione: '', grezzoRicevuto: false, inMontaggio: false, pronto: false }
   };
 }
 
@@ -1240,6 +1246,22 @@ function elemColor(st){
 ═══════════════════════════════════ */
 var sezFilter='default'; // 'default' | 'two' | 'all'
 
+function updateProdStatus(){
+  var sec=S.sections.find(function(s){ return s.id===editingId; });
+  if(!sec) return;
+  if(!sec.prodStatus) sec.prodStatus={};
+  var c1=document.getElementById('ps-fattibile').checked;
+  var c2=c1&&document.getElementById('ps-grezzo').checked;
+  var c3=c2&&document.getElementById('ps-montaggio').checked;
+  var c4=c3&&document.getElementById('ps-pronto').checked;
+  var dataRic=document.getElementById('ps-data-ric').value||'';
+  sec.prodStatus={fattibile:c1,dataRicezione:dataRic,grezzoRicevuto:c2,inMontaggio:c3,pronto:c4};
+  sec.updatedAt=Date.now();
+  save();
+  // Re-render panel to update enabled/disabled states
+  renderPanelBody(sec);
+}
+
 function setSezFilter(val){
   sezFilter=val;
   ['default','two','all'].forEach(function(v){
@@ -1313,31 +1335,33 @@ function renderSections(){
 
   document.getElementById('sectionGrid').innerHTML=secs.map(sec=>{
     const st=sectionStatus(sec);
-    const assign=sec.assignment
-      ? `<div class="sc-assign set">📅 ${isoToDisplay(sec.assignment.date)} · Bl.${sec.assignment.blocco}</div>`
-      : `<div class="sc-assign standby">📦 Standby</div>`;
+    const ps=sec.prodStatus||{};
+    const assignStr=sec.assignment&&sec.assignment.date
+      ? '📅 '+isoToDisplay(sec.assignment.date)
+      : '📦 Standby';
+    const tc=TYPE_COLORS[sec.type]||{bg:'#2a2a2a',color:'#a1a1aa'};
 
-    // element badges
-    const badges=[
-      {code:'S',st:sec.script.status||'standby',active:true},
-      {code:'R',st:sec.rvm.status||'standby',active:sec.rvm.needed},
-      ...sec.foto.slice(0,3).map((_,i)=>({code:'F'+(i+1),st:sec.foto[i].status||'standby',active:true})),
-      ...sec.coperture.slice(0,3).map((_,i)=>({code:'C'+(i+1),st:sec.coperture[i].status||'standby',active:true})),
-    ];
-    const bdgHtml=badges.map(b=>`<div class="elbdg ${b.active?'p-'+b.st:'p-off'}" title="${b.code}">${b.code}</div>`).join('');
+    // Prod checkboxes — sequentially enabled
+    const c1=ps.fattibile;
+    const c2=c1&&ps.grezzoRicevuto;
+    const c3=c2&&ps.inMontaggio;
+    const c4=c3&&ps.pronto;
+    const dataRic=ps.dataRicezione?'<span style="font-size:0.62rem;color:var(--text3);margin:0 0.3rem">📅'+ps.dataRicezione+'</span>':'';
+
+    const checks=`<div class="prod-checks">
+      <span class="prod-check ${c1?'active':''}"><input type="checkbox" ${c1?'checked':''}> Fattibile</span>
+      ${dataRic}
+      <span class="prod-check ${c1?'':''}" style="opacity:${c1?1:0.3}"><input type="checkbox" ${c2?'checked':''}> Grezzo</span>
+      <span class="prod-check" style="opacity:${c2?1:0.3}"><input type="checkbox" ${c3?'checked':''}> Montaggio</span>
+      <span class="prod-check" style="opacity:${c3?1:0.3}"><input type="checkbox" ${c4?'checked':''}> Pronto</span>
+    </div>`;
 
     return `<div class="sec-card ${st}" onclick="openSection('${sec.id}')">
-      <div class="sc-head">
-        <div class="sc-type-badge">${TYPE_LABELS[sec.type]||sec.type}</div>
-        <div>
-          <div class="sc-title">${sec.title||'<em style="color:var(--text3);font-weight:400">Senza titolo</em>'}</div>
-          ${sec.responsabile?`<div class="sc-resp">👤 ${sec.responsabile}</div>`:''}
-        </div>
-      </div>
-      <div class="sc-meta">
-        ${assign}
-        <div class="sc-elems">${bdgHtml}</div>
-      </div>
+      <div style="background:${tc.bg};color:${tc.color};font-family:var(--mono);font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:3px;white-space:nowrap;flex-shrink:0">${TYPE_LABELS[sec.type]||sec.type}</div>
+      <div style="font-weight:600;font-size:0.85rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sec.title||'<em style="color:var(--text3);font-weight:400">Senza titolo</em>'}</div>
+      ${sec.responsabile?`<div style="font-size:0.72rem;color:var(--text3);white-space:nowrap;flex-shrink:0">👤 ${sec.responsabile}</div>`:''}
+      <div style="font-size:0.7rem;color:var(--text3);white-space:nowrap;flex-shrink:0">${assignStr}</div>
+      ${checks}
     </div>`;
   }).join('');
 }
@@ -3271,6 +3295,22 @@ function openSection(id){
 
 function renderPanelBody(sec){
   let h='';
+  if(!sec.prodStatus) sec.prodStatus={fattibile:false,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
+  var ps=sec.prodStatus;
+
+  // PROD STATUS BAR — always visible at top
+  h+='<div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.7rem;background:var(--bg3);border-radius:6px;margin-bottom:0.8rem;flex-wrap:wrap">'
+    +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);letter-spacing:0.5px;flex-shrink:0">STATO PRODUZIONE</div>'
+    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.fattibile?'color:var(--acc)':'')+'">'
+    +'<input type="checkbox" id="ps-fattibile" '+(ps.fattibile?'checked':'')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> Fattibile</label>'
+    +'<input class="finput" id="ps-data-ric" type="date" value="'+(ps.dataRicezione||'')+'" title="Data probabile ricezione materiale" '+(ps.fattibile?'':'disabled')+' style="width:140px;font-size:0.75rem;padding:0.15rem 0.4rem;opacity:'+(ps.fattibile?1:0.4)+'">'
+    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.grezzoRicevuto?'color:var(--acc)':'')+(ps.fattibile?'':';opacity:0.35;pointer-events:none')+'">'
+    +'<input type="checkbox" id="ps-grezzo" '+(ps.grezzoRicevuto?'checked':'')+' '+(ps.fattibile?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> Grezzo ricevuto</label>'
+    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.inMontaggio?'color:var(--acc)':'')+(ps.grezzoRicevuto?'':';opacity:0.35;pointer-events:none')+'">'
+    +'<input type="checkbox" id="ps-montaggio" '+(ps.inMontaggio?'checked':'')+' '+(ps.grezzoRicevuto?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> In montaggio</label>'
+    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.pronto?'color:#4ade80':'')+(ps.inMontaggio?'':';opacity:0.35;pointer-events:none')+'">'
+    +'<input type="checkbox" id="ps-pronto" '+(ps.pronto?'checked':'')+' '+(ps.inMontaggio?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:#4ade80"> ✓ Pronto</label>'
+    +'</div>';
 
   // TYPE options - built separately to avoid nested template literal issues on iOS
   const typeOpts = Object.keys(TYPE_LABELS).map(function(k){
