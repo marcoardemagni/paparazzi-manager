@@ -529,8 +529,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <span class="hdr-stat" id="hdrStat"></span>
     <button class="sync-ind" id="syncInd" onclick="openSyncModal()">☁ Sync</button>
     <button class="hbtn" onclick="cloudLoad(true)" title="Ricarica dati dal cloud">↻ Aggiorna</button>
+    <button class="hbtn" id="btn-sandbox" onclick="toggleSandbox()" title="Attiva/disattiva modalità sandbox" style="border-color:var(--brd)">🧪 Sandbox</button>
     <button class="hbtn" onclick="exportData()">↓ Export</button>
     <label class="hbtn" style="cursor:pointer">↑ Import<input type="file" id="importFile" accept=".json" style="display:none"></label>
+    <span id="hdr-user" onclick="doChangeUser()" title="Cambia utente" style="font-family:var(--mono);font-size:0.72rem;color:var(--acc);font-weight:700;padding:0.2rem 0.6rem;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;cursor:pointer;white-space:nowrap">👤 —</span>
     <button class="hbtn" onclick="doLogout()" title="Esci e ricarica da cloud">⏏ Logout</button>
     <button class="hbtn primary" onclick="newSection()">+ Nuova sezione</button>
   </div>
@@ -572,6 +574,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="flt-btn active" id="fltBtnDefault" onclick="setSezFilter('default')">Trending · Hot Stuff · Bandierina · Domandone · Ospite</button>
       <button class="flt-btn" id="fltBtnTwo" onclick="setSezFilter('two')">Solo Trending &amp; Hot Stuff</button>
       <button class="flt-btn" id="fltBtnAll" onclick="setSezFilter('all')">Tutte</button>
+      <button class="flt-btn" id="fltBtnMine" onclick="setSezFilter('mine')" title="Solo le sezioni assegnate a me">👤 Le mie</button>
       <select class="fselect" id="fltAssignment" onchange="renderSections()" style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-left:0.5rem;max-width:200px">
         <option value="unassigned" selected>Non inserite in puntata</option>
         <option value="assigned">Inserite in puntata</option>
@@ -939,6 +942,18 @@ var FIREBASE_CONFIG = {
   appId: "1:591993357814:web:e642b125ab9ab509a2b3d7"
 };
 // Firestore: 4 documenti separati per stare sotto il limite 1MB
+var SANDBOX_MODE = false;
+
+function getFirestoreDocs(){
+  var prefix = SANDBOX_MODE ? 'data_sandbox' : 'data';
+  return {
+    sections:  prefix+'/sections',
+    calEvents: prefix+'/calEvents',
+    guests:    prefix+'/guests',
+    teamMembers: prefix+'/teamMembers'
+  };
+}
+
 var FIRESTORE_DOCS = {
   sections:    'data/sections',
   calEvents:   'data/calEvents',
@@ -1037,11 +1052,11 @@ function cloudSave(){
     if(sec) sec.updatedAt=ts;
   }
 
-  var keys=Object.keys(FIRESTORE_DOCS);
+  var keys=Object.keys(getFirestoreDocs());
   var done=0; var errs=0;
 
   keys.forEach(function(key){
-    var path=FIRESTORE_DOCS[key].split('/');
+    var path=getFirestoreDocs()[key].split('/');
     var colRef=db.collection(path[0]);
     var docRef=colRef.doc(path[1]);
 
@@ -1112,10 +1127,10 @@ function cloudLoad(force, callback){
   if(!force&&editingId){ setSyncInd('ok','Sync \u2713'); if(callback) callback(); return; }
   if(!force&&Date.now()-_lastSaveTime<10000){ setSyncInd('ok','Sync \u2713'); if(callback) callback(); return; }
   setSyncInd('busy','carico\u2026');
-  var keys=Object.keys(FIRESTORE_DOCS);
+  var keys=Object.keys(getFirestoreDocs());
   var done=0; var anyData=false;
   keys.forEach(function(key){
-    var path=FIRESTORE_DOCS[key].split('/');
+    var path=getFirestoreDocs()[key].split('/');
     db.collection(path[0]).doc(path[1]).get()
       .then(function(doc){
         if(doc.exists){
@@ -1264,7 +1279,7 @@ function updateProdStatus(){
 
 function setSezFilter(val){
   sezFilter=val;
-  ['default','two','all'].forEach(function(v){
+  ['default','two','all','mine'].forEach(function(v){
     var b=document.getElementById('fltBtn'+v.charAt(0).toUpperCase()+v.slice(1));
     if(b) b.classList.toggle('active', v===val);
   });
@@ -1289,11 +1304,17 @@ function filteredSections(){
     // Apply sezFilter
     if(sezFilter==='default' && !defaultTypes.includes(sec.type)) return false;
     if(sezFilter==='two' && !twoTypes.includes(sec.type)) return false;
+    if(sezFilter==='mine'){
+      if(!CURRENT_USER) return false;
+      if((sec.responsabile||'').toLowerCase()!==CURRENT_USER.toLowerCase()) return false;
+    }
     // existing type/status filters still apply on top
     var assignmentFilter=document.getElementById('fltAssignment');
-    var assignVal=assignmentFilter?assignmentFilter.value:'all';
+    var assignVal=assignmentFilter?assignmentFilter.value:'unassigned';
     if(assignVal==='unassigned' && sec.assignment&&sec.assignment.date) return false;
     if(assignVal==='assigned' && (!sec.assignment||!sec.assignment.date)) return false;
+    // Hide untitled sections unless "all" is selected
+    if(assignVal!=='all' && (!sec.title||!sec.title.trim())) return false;
     if(filters.type!=='all'){
       if(filters.type==='altre'){
         if(['trending','hotstuff','ospite','bandierina','headlines'].includes(sec.type)) return false;
@@ -6219,6 +6240,48 @@ document.getElementById('icsFile').onchange=function(e){
 /* ═══════════════════════════════════
    EXPORT / IMPORT
 ═══════════════════════════════════ */
+function toggleSandbox(){
+  SANDBOX_MODE=!SANDBOX_MODE;
+  var btn=document.getElementById('btn-sandbox');
+  var banner=document.getElementById('sandbox-banner');
+
+  if(SANDBOX_MODE){
+    if(btn){ btn.style.background='#7c3aed'; btn.style.color='#fff'; btn.style.borderColor='#7c3aed'; }
+    if(!banner){
+      var b=document.createElement('div');
+      b.id='sandbox-banner';
+      b.style.cssText='position:fixed;top:0;left:0;right:0;background:#7c3aed;color:#fff;text-align:center;font-family:var(--mono);font-size:0.75rem;font-weight:700;padding:3px;z-index:9998;letter-spacing:0.1em';
+      b.textContent='🧪 MODALITÀ SANDBOX — i dati qui non influenzano la produzione';
+      document.body.insertBefore(b, document.body.firstChild);
+    }
+    // Reset local state for sandbox
+    S={sections:[],calEvents:[],guests:[],teamMembers:[]};
+    cloudLoad(true);
+  } else {
+    if(btn){ btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; }
+    var b=document.getElementById('sandbox-banner');
+    if(b) b.remove();
+    // Reload production data
+    S={sections:[],calEvents:[],guests:[],teamMembers:[]};
+    cloudLoad(true);
+  }
+}
+
+function doChangeUser(){
+  // Show user selector overlay without requiring password again
+  var members=getTeamMembers();
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var opts=members.map(function(m){
+    return '<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();renderSections()" style="width:100%;text-align:left;padding:0.5rem 0.8rem;background:'+(CURRENT_USER===m?'var(--acc)':'var(--bg3)')+';color:'+(CURRENT_USER===m?'#fff':'inherit')+';border:1px solid var(--brd);border-radius:6px;cursor:pointer;font-size:0.9rem;margin-bottom:0.4rem">'+m+'</button>';
+  }).join('');
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:14px;padding:1.5rem;width:280px;box-shadow:0 8px 40px rgba(0,0,0,0.5)">'
+    +'<div style="font-weight:800;font-size:1rem;margin-bottom:1rem;text-align:center">👤 Chi sei?</div>'
+    +opts+'</div>';
+  document.body.appendChild(overlay);
+}
+
 function doLogout(){
   if(!confirm('Esci? I dati non salvati andranno persi.')) return;
   localStorage.clear();
@@ -6341,8 +6404,26 @@ document.getElementById('overlay').onclick=e=>{ if(e.target===e.currentTarget) s
 ═══════════════════════════════════ */
 var APP_PWD = 'Papa26';
 
+var CURRENT_USER = '';
+
+function getCurrentUser(){
+  try{ return localStorage.getItem('ppz_user')||''; }catch(e){ return ''; }
+}
+
+function setCurrentUser(name){
+  CURRENT_USER=name;
+  try{ localStorage.setItem('ppz_user', name); }catch(e){}
+  var el=document.getElementById('hdr-user');
+  if(el) el.textContent=name||'—';
+}
+
 function checkPassword(){
-  try{ if(localStorage.getItem('ppz_auth')===APP_PWD) return true; }catch(e){}
+  try{
+    if(localStorage.getItem('ppz_auth')===APP_PWD){
+      CURRENT_USER=getCurrentUser();
+      return true;
+    }
+  }catch(e){}
   return false;
 }
 
@@ -6365,13 +6446,31 @@ function showPasswordGate(){
   });
 }
 
+function showUserSelector(){
+  var members=getTeamMembers();
+  var opts=members.map(function(m){
+    return '<button onclick="selectUser(\''+m+'\')" style="width:100%;text-align:left;padding:0.5rem 0.8rem;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;cursor:pointer;font-size:0.9rem;margin-bottom:0.4rem;transition:background 0.15s" onmouseenter="this.style.background=\'var(--surfl)\'" onmouseleave="this.style.background=\'var(--bg3)\'">'+m+'</button>';
+  }).join('');
+  var gate=document.getElementById('pwd-gate');
+  if(gate) gate.querySelector('div').innerHTML=''
+    +'<div style="font-size:1.6rem;margin-bottom:0.3rem">👤</div>'
+    +'<div style="font-weight:800;font-size:1.1rem;margin-bottom:0.3rem;letter-spacing:0.04em">Chi sei?</div>'
+    +'<div style="font-size:0.8rem;opacity:0.5;margin-bottom:1.2rem">Seleziona il tuo nome</div>'
+    +'<div style="text-align:left">'+opts+'</div>';
+}
+
+function selectUser(name){
+  setCurrentUser(name);
+  var gate=document.getElementById('pwd-gate');
+  if(gate) gate.remove();
+  bootApp();
+}
+
 function submitPassword(){
   var val=document.getElementById('pwd-input').value;
   if(val===APP_PWD){
     try{ localStorage.setItem('ppz_auth', APP_PWD); }catch(e){}
-    var gate=document.getElementById('pwd-gate');
-    if(gate) gate.remove();
-    bootApp();
+    showUserSelector();
   } else {
     var err=document.getElementById('pwd-err');
     if(err) err.textContent='Password non corretta.';
@@ -6410,6 +6509,20 @@ function bootApp(){
   calGoToday();
   showView('calendario');
   setSyncInd('busy','carico\u2026');
+  // Show current user in header
+  CURRENT_USER=getCurrentUser();
+  var uEl=document.getElementById('hdr-user');
+  if(uEl) uEl.textContent='👤 '+(CURRENT_USER||'—');
+  // If no user selected yet, show selector
+  if(!CURRENT_USER){
+    setTimeout(function(){
+      var gate=document.createElement('div');
+      gate.id='pwd-gate';
+      gate.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+      document.body.appendChild(gate);
+      showUserSelector();
+    }, 500);
+  }
 
   if(window.firebase_firestore){
     // Show a loading overlay — don't render from localStorage until Firestore responds
@@ -6441,6 +6554,15 @@ function bootApp(){
 /* ═══════════════════════════════════
    BOOT
 ═══════════════════════════════════ */
+// Prefill empty date fields with today on first focus
+document.addEventListener('focusin', function(e){
+  if(e.target.type==='date' && !e.target.value){
+    var today=new Date();
+    e.target.value=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    e.target.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+});
+
 if(checkPassword()){
   bootApp();
 } else {
