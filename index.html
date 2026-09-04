@@ -3922,13 +3922,17 @@ function renderPanelBody(sec){
     <div class="frow-2">
       <div>
         <div class="flbl">Data puntata</div>
-        <input class="finput" type="date" id="f-assign-date" value="${(sec.assignment&&sec.assignment.date)||''}">
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <input class="finput" type="date" id="f-assign-date" value="${(sec.assignment&&sec.assignment.date)||''}" oninput="aggiornaPreviewPuntata(this.value)" style="flex:1">
+          <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;flex-shrink:0" onclick="openPreviewPuntata(document.getElementById('f-assign-date').value)" title="Vedi stato puntata">👁</button>
+        </div>
       </div>
       <div>
         <div class="flbl">N° Blocco</div>
         <input class="finput" type="number" id="f-assign-blocco" min="1" max="20" value="${(sec.assignment&&sec.assignment.blocco)||''}" placeholder="es. 5">
       </div>
     </div>
+    <div id="puntata-preview-inline" style="margin-top:0.4rem;font-size:0.72rem;color:var(--text3)"></div>
     ${sec.assignment?`<button class="assign-clear" onclick="clearAssignment()">Rimuovi assegnazione</button>`:''}
   </div>`;
 
@@ -4228,6 +4232,56 @@ function updateMediaDesc(type,i,v){
   const sec=S.sections.find(s=>s.id===editingId); if(!sec) return;
   sec[type][i].desc=v; save();
 }
+function aggiornaPreviewPuntata(iso){
+  var el=document.getElementById('puntata-preview-inline');
+  if(!el||!iso) return;
+  var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso&&s.id!==editingId; });
+  secs=sortSezioniPuntata(secs);
+  if(!secs.length){ el.textContent='Nessun blocco assegnato a questa data.'; return; }
+  el.textContent=secs.length+' blocchi: '+secs.map(function(s){ return (TYPE_LABELS[s.type]||s.type)+(s.title?' – '+s.title.slice(0,20):''); }).join(' · ');
+}
+
+function openPreviewPuntata(iso){
+  if(!iso){ alert('Seleziona prima una data.'); return; }
+  var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso&&s.id!==editingId; });
+  secs=sortSezioniPuntata(secs);
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var nd=new Date(iso+'T12:00:00');
+  var label=DAYS_IT[nd.getDay()]+' '+nd.getDate()+' '+MONTHS_IT[nd.getMonth()]+' '+nd.getFullYear();
+
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+
+  var rows=secs.length
+    ? secs.map(function(s,i){
+        var tc=TYPE_COLORS[s.type]||{bg:'#2a2a2a',color:'#a1a1aa'};
+        var ps=s.prodStatus||{};
+        var stati=[];
+        if(ps.pronto) stati.push('<span style="color:#4ade80">✓ Pronto</span>');
+        else if(ps.inMontaggio) stati.push('<span style="color:#fbbf24">✂ Montaggio</span>');
+        else if(ps.grezzoRicevuto) stati.push('<span style="color:#60a5fa">📦 Grezzo</span>');
+        else if(ps.fattibile) stati.push('<span style="color:#c084fc">✔ Fattibile</span>');
+        return '<div style="display:flex;align-items:center;gap:0.6rem;padding:0.35rem 0.5rem;background:var(--bg2);border-radius:5px">'
+          +'<div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);width:24px;text-align:right;flex-shrink:0">B'+(i+1)+'</div>'
+          +'<div style="background:'+tc.bg+';color:'+tc.color+';font-family:var(--mono);font-size:0.6rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:3px;white-space:nowrap;flex-shrink:0">'+(TYPE_LABELS[s.type]||s.type)+'</div>'
+          +'<div style="flex:1;font-size:0.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(s.title||'—')+'</div>'
+          +(stati.length?'<div style="font-size:0.7rem;flex-shrink:0">'+stati.join('')+'</div>':'')
+          +'</div>';
+      }).join('')
+    : '<div style="color:var(--text3);font-size:0.82rem;padding:0.5rem">Nessun blocco assegnato a questa data.</div>';
+
+  overlay.innerHTML='<div style="background:var(--bg);border-radius:10px;padding:1.2rem;min-width:340px;max-width:520px;max-height:80vh;overflow-y:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem">'
+    +'<div style="font-weight:700;font-size:0.95rem">Puntata del '+label+' <span style="font-size:0.78rem;color:var(--text3);font-weight:400">('+secs.length+' blocchi)</span></div>'
+    +'<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:inherit;opacity:0.6">&times;</button>'
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:0.3rem">'+rows+'</div>'
+    +'</div>';
+  document.body.appendChild(overlay);
+}
+
 function clearAssignment(){
   const sec=S.sections.find(s=>s.id===editingId); if(!sec) return;
   sec.assignment=null; save(); renderPanelBody(sec);
