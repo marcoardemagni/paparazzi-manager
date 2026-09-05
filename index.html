@@ -2726,7 +2726,7 @@ function generaDialogoTrending(secId){
       try{ parsed=JSON.parse(clean); }
       catch(e){ if(st) st.textContent='Errore parsing. Riprova.'; return; }
       var lines=(parsed.dialogo||[]).map(function(l){
-        if(l.chi==='RVM') return '>>> RVM: '+l.testo;
+        if(l.chi==='RVM') return 'RVM: '+l.testo;
         return l.chi+': '+l.testo;
       });
       var dialogo=lines.join('\n\n');
@@ -2896,6 +2896,11 @@ function trendingConflictCount(isoDate){
 /* ═══════════════════════════════════
    GENERA SCALETTA DOCX (client-side)
 ═══════════════════════════════════ */
+function numberToWord(n){
+  var words=['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
+  return (n>=0&&n<words.length)?words[n]:String(n);
+}
+
 function generaScalettaDocx(iso){
   var d=window.docx||window.Document&&{Document:window.Document,Packer:window.Packer,Table:window.Table,TableRow:window.TableRow,TableCell:window.TableCell,Paragraph:window.Paragraph,TextRun:window.TextRun,WidthType:window.WidthType,AlignmentType:window.AlignmentType,VerticalAlign:window.VerticalAlign,ShadingType:window.ShadingType};
   if(!d||!d.Packer){ alert('Libreria docx non caricata. Ricarica la pagina.'); return; }
@@ -2919,18 +2924,18 @@ function generaScalettaDocx(iso){
     var t=title||'';
     var map={
       'sigla':'SIGLA',
-      'welcome':'WALL TORINO\n\nFIL E ARDE IN PIEDI\n\n\n\nE-MAIL PAPARAZZI@RAI.IT',
-      'bandierina':b+'\n\n\nFOTO '+t+'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA',
+      'welcome':'WALL TORINO\n\nFIL E ARDE IN PIEDI',
+      'bandierina':b+'\n\n\nFOTO '+t+'\n\n\n\n\n\n\n\nCARTINA ANIMATA',
       'domandone':b+'\n\n\nGRAFICA DOMANDONE\n\nE-MAIL PAPARAZZI@RAI.IT',
-      'domandone-relaunch':b+'\n\n\nGRAFICA THE DOMANDONE\n\nE-MAIL PAPARAZZI@RAI.IT\nGRAFICA: HOT STUFF',
-      'domandone-answer':b+'\n\n\nGRAFICA DOMANDONE\n\nGRAFICA RISPOSTA\n\nE-MAIL PAPARAZZI@RAI.IT',
+      'domandone-relaunch':b+'\n\n\nGRAFICA THE DOMANDONE',
+      'domandone-answer':b+'\n\n\nGRAFICA DOMANDONE\n\nGRAFICA RISPOSTA',
       'temperature':'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA',
       'headlines':b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO',
-      'lancio-trending':b+'\n>>> GRAFICA: N°',
-      'trending':b+'\n\n+ CARTELLO N°\n\nFOTO/VIDEO',
+      'lancio-trending':b+'\nGRAFICA: N°',
+      'trending':b+'\n\nFOTO/VIDEO',
       'hotstuff':b+'\n\nFOTO/VIDEO',
       'ospite':b+'\n\nFOTO/VIDEO',
-      'poem':b+'\nARDEMAGNI AL LEGGIO\nRULLO',
+      'poem':b+'\nARDE VA AL LEGGIO\nRULLO',
       'saluti':''
     };
     return map[tk]||b;
@@ -2941,7 +2946,7 @@ function generaScalettaDocx(iso){
 
   function mkPara(text,soundCol,highlight,underline){ var sz=soundCol?16:22; var runs=(text||'').split('\n').flatMap(function(line,i,arr){ var opts={text:line,bold:true,size:sz,font:'Arial'}; if(highlight) opts.highlight=highlight; if(underline) opts.underline={}; var r=[new d.TextRun(opts)]; if(i<arr.length-1) r.push(new d.TextRun({break:1})); return r; }); return new d.Paragraph({children:runs,spacing:{after:0,before:0}}); }
   function mkCell(paras,ci,shade){ return new d.TableCell({width:{size:COL[ci],type:d.WidthType.DXA},verticalAlign:d.VerticalAlign.TOP,shading:shade?{type:d.ShadingType.CLEAR,color:'auto',fill:'E8E8E8'}:undefined,children:paras}); }
-  function bumperRow(label){ return new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('>>> '+label,'',false,true)],2),mkCell([mkPara('')],3),mkCell([mkPara('')],4)]}); }
+  function bumperRow(label){ return new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara(label,'',false,true)],2),mkCell([mkPara('')],3),mkCell([mkPara('')],4)]}); }
   function dialogLines(text){ if(!text) return [mkPara('XXXX')]; var lines=text.split('\n\n').filter(function(l){return l.trim();}); var result=[]; lines.forEach(function(line,idx){ var colon=line.indexOf(':'); if(colon>0){ var who=line.slice(0,colon).trim(),what=line.slice(colon+1).trim(); result.push(new d.Paragraph({children:[new d.TextRun({text:who+': ',bold:true,size:22,font:'Arial'}),new d.TextRun({text:what,bold:true,size:22,font:'Arial'})],spacing:{after:0,before:0}})); } else { var isRvmP=line.trim().startsWith('>>>'); result.push(mkPara(line,'',isRvmP?'yellow':false)); } if(idx<lines.length-1) result.push(BLANK); }); return result; }
 
   var tCount=secs.filter(function(s){return s.type==='trending';}).length;
@@ -2955,7 +2960,7 @@ function generaScalettaDocx(iso){
     var tk=getTk(s);
     if(tk==='header') return;
     if(tk==='headlines') rows.push(bumperRow('BUMPER: HEADLINES'));
-    if(tk==='lancio-trending'){ rows.push(bumperRow('BUMPER: TRENDING ITALY')); return; }
+    if(tk==='lancio-trending') rows.push(bumperRow('BUMPER: TRENDING ITALY'));
     if(tk==='domandone-relaunch') rows.push(bumperRow('BUMPER: DOMANDONE RELAUNCH'));
     if(tk==='hotstuff'){ var si=secs.indexOf(s); var prev=si>0?secs[si-1]:null; if(!prev||prev.type!=='hotstuff') rows.push(bumperRow('BUMPER: HOT STUFF')); }
 
@@ -2965,7 +2970,7 @@ function generaScalettaDocx(iso){
     cumTime+=dur;
     var wp=[mkPara((s.title||tk).toUpperCase())];
 
-    if(tk==='sigla'){ wp.push(mkPara('OPENING TITLES')); _hlRow='yellow'; }
+    if(tk==='sigla'){ wp[0]=mkPara('SIGLA - OPENING TITLES'); _hlRow='yellow'; }
     else if(tk==='welcome'){
       var wl=(s.script||{}).welcome||{};
       var cityStr=(wl.cities||[]).join(', ')||'…';
@@ -3007,6 +3012,17 @@ function generaScalettaDocx(iso){
       }
     }
     else if(tk==='headlines'){ wp.push(mkPara('FILIPPO: [Press Review]')); wp.push(BLANK); wp.push(mkPara('FILIPPO COINVOLGE MARCO DURANTE LA RASSEGNA')); wp.push(BLANK); wp.push(mkPara("FILIPPO: And now let's go to the trending topics!")); }
+    else if(tk==='lancio-trending'){
+      // Count how many trending blocks follow in this episode
+      var trendingCount=secs.filter(function(sx){ return sx.type==='trending'; }).length;
+      var lt=s.script&&s.script['lancio-trending']||{};
+      var launchNum=lt.numero||String(trendingCount);
+      var launchText=lt.testo1||('TRENDING ITALY\nWhat is trending today in Italy');
+      // Build Filippo launch line
+      var lancioLine='FILIPPO: Now it\'s time for the biggest talking points in Italy\u2026 starting at number '+numberToWord(parseInt(launchNum))+' !';
+      wp.push(mkPara(launchText)); wp.push(BLANK);
+      wp.push(mkPara(lancioLine));
+    }
     else if(tk==='trending'){
       tIdx++;
       var tdial=(s.script||{}).dialogo||'';
@@ -3069,7 +3085,7 @@ function generaScalettaDocx(iso){
 
     var _hl=_hlRow; _hlRow=false;
     rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell([mkPara(timeStr,'',_hl)],1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
-    if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('>>> GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('>>> BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
+    if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
     if(tk==='trending'&&(tCount-tIdx)>0) rows.push(bumperRow('BUMPER TRENDING N° '+(tCount-tIdx)));
   });
 
