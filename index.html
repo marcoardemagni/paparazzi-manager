@@ -712,7 +712,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <div class="day-chip" id="calChip">—</div>
       <button class="ep-nav-btn" id="calNext">›</button>
       <button class="day-today-btn" onclick="calGoToday()">Questa settimana</button>
-      <input type="search" id="calSearch" placeholder="Cerca evento…" oninput="renderCalendario()" style="font-size:0.78rem;padding:0.2rem 0.6rem;max-width:160px;background:var(--bg3);border:1px solid var(--brd2);border-radius:6px;color:inherit">
+      <input type="search" id="calSearch" placeholder="Cerca evento…" oninput="renderCalendario()" onkeydown="if(event.key==='Enter') cercaOvunque()" style="font-size:0.78rem;padding:0.2rem 0.6rem;max-width:160px;background:var(--bg3);border:1px solid var(--brd2);border-radius:6px;color:inherit">
+      <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem" onclick="cercaOvunque()" title="Cerca in tutte le settimane">🔍 Tutte</button>
       <select class="fselect" id="calCatFilter" onchange="renderCalendario()" style="font-size:0.78rem;padding:0.2rem 0.5rem;max-width:130px">
         <option value="">Tutte le categorie</option>
       </select>
@@ -743,6 +744,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="newCalEvent()">+ Nuovo evento</button>
     </div>
     <div id="calGrid"></div>
+    <div id="calSearchResults" style="display:none;padding:0.5rem 1rem"></div>
   </div>
 </div>
 <div class="overlay" id="overlay">
@@ -2931,7 +2933,7 @@ function generaScalettaDocx(iso){
       'domandone-answer':b+'\n\n\nGRAFICA DOMANDONE\n\n\n\n\n\n\n\n\n\nGRAFICA RISPOSTA',
       'temperature':'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA',
       'headlines':b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO',
-      'lancio-trending':b+'\nGRAFICA: N°',
+      'lancio-trending':b,
       'trending':b+'\n\nFOTO/VIDEO',
       'hotstuff':b+'\n\nFOTO/VIDEO',
       'ospite':b+'\n\nFOTO/VIDEO',
@@ -4814,6 +4816,7 @@ function renderCalendario(){
   }
   var catFilter=catSel?catSel.value:'';
   var calSearch=(document.getElementById('calSearch')?document.getElementById('calSearch').value:'').toLowerCase().trim();
+  var sr=document.getElementById('calSearchResults'); if(sr) sr.style.display='none';
   var sortOrder=document.getElementById('calSortOrder')?document.getElementById('calSortOrder').value:'date';
   var minRil=parseInt(document.getElementById('calMinRil')?document.getElementById('calMinRil').value:'1')||1;
 
@@ -4938,6 +4941,58 @@ function toggleUpcoming(){
   var open=list.style.display==='block';
   list.style.display=open?'none':'block';
   if(arrow) arrow.textContent=open?'▶':'▼';
+}
+
+function cercaOvunque(){
+  var q=(document.getElementById('calSearch').value||'').toLowerCase().trim();
+  var sr=document.getElementById('calSearchResults');
+  if(!sr) return;
+  if(!q){ sr.style.display='none'; return; }
+
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+  // Collect all events matching query, sorted by dateStart
+  var matches=[];
+  (S.calEvents||[]).forEach(function(ev){
+    if((ev.title||'').toLowerCase().includes(q)||(ev.note||'').toLowerCase().includes(q)||(ev.luogo||'').toLowerCase().includes(q)){
+      // Expand to all active dates
+      var expanded=expandCalEvent(ev);
+      expanded.forEach(function(item){ matches.push({ev:ev, date:item.date}); });
+      if(!expanded.length) matches.push({ev:ev, date:ev.dateStart});
+    }
+  });
+  matches.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+
+  if(!matches.length){
+    sr.innerHTML='<div style="color:var(--text3);font-size:0.82rem;padding:0.5rem">Nessun evento trovato per "'+esc(q)+'"</div>';
+    sr.style.display='block';
+    return;
+  }
+
+  var h='<div style="font-family:var(--mono);font-size:0.7rem;font-weight:700;color:var(--text3);letter-spacing:0.05em;margin-bottom:0.6rem">'+matches.length+' RISULTATI PER "'+esc(q.toUpperCase())+'"</div>'
+    +'<div style="display:flex;flex-direction:column;gap:0.3rem">';
+  matches.forEach(function(item){
+    var ev=item.ev;
+    var col=CAL_COLORS[ev.categoria]||'#555';
+    var nd=new Date(item.date+'T12:00:00');
+    var dateLabel=DAYS_IT[nd.getDay()]+' '+nd.getDate()+' '+MONTHS_IT[nd.getMonth()]+' '+nd.getFullYear();
+    var tc=ev.trattato?(function(){
+      var sec=S.sections.find(function(s){ return s.plan&&s.plan.fonteCalendarioId===ev.id; });
+      var lbl=sec?(TYPE_LABELS[sec.type]||sec.type):'in puntata';
+      var tcc=sec&&TYPE_COLORS[sec.type]||{bg:'#0d3a1e',color:'#4ade80'};
+      return '<span style="font-size:0.62rem;background:'+tcc.bg+';color:'+tcc.color+';border-radius:3px;padding:0 4px;margin-left:4px">'+lbl+'</span>';
+    })():'';
+    h+='<div onclick="openCalEvent(\''+ev.id+'\')" style="display:flex;align-items:center;gap:0.6rem;padding:0.35rem 0.6rem;background:var(--bg2);border-radius:5px;border-left:3px solid '+col+';cursor:pointer">'
+      +'<div style="font-size:0.72rem;color:var(--text3);white-space:nowrap;flex-shrink:0;min-width:120px">'+dateLabel+'</div>'
+      +'<div style="flex:1;font-size:0.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ev.title||'—')+tc+'</div>'
+      +'<div style="font-size:0.72rem;color:var(--text3);flex-shrink:0">'+esc(ev.luogo||'')+'</div>'
+      +'<div style="font-size:0.72rem;color:var(--text3);flex-shrink:0">★'+(ev.rilevanza||5)+'</div>'
+      +'</div>';
+  });
+  h+='</div>';
+  sr.innerHTML=h;
+  sr.style.display='block';
 }
 
 function openCalEvent(id){
@@ -5694,9 +5749,18 @@ function showOspiteModal(g, isNew){
     +'<div class="osp-modal-cols" style="display:grid;grid-template-columns:1.3fr 1fr;gap:0 2rem">'
     +'<div class="osp-col-left">';
 
+  var rankOpts='';
+  [0,1,2,3,4,5,6,7,8,9].forEach(function(n){
+    rankOpts+='<option value="'+n+'"'+((g.ranking||0)===n?' selected':'')+'>'+(n===0?'— nessun ranking':n)+'</option>';
+  });
+
   // A — CHI
   html+=areaHeader('A','Chi')
+    +'<div style="display:grid;grid-template-columns:1fr auto;gap:0.6rem;align-items:start;margin-bottom:0.3rem">'
     +field('Nome ospite','osp-nome',g.nome,{placeholder:'Nome e cognome…'})
+    +'<div><div class="flbl" style="font-size:0.7rem">Ranking (1–9)</div>'
+    +'<select class="fselect" id="osp-ranking-top" style="min-width:80px">'+rankOpts+'</select></div>'
+    +'</div>'
     +checkboxF('Ospite abituale','osp-abituale',g.abituale)
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">'
     +selectF('Macroarea','osp-macroarea',catOpts)
@@ -5712,8 +5776,8 @@ function showOspiteModal(g, isNew){
   // C — QUANDO
   html+=areaHeader('C','Quando')
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">'
-    +'<div><div class="flbl" style="font-size:0.7rem">Day</div><input class="finput" type="date" id="osp-day" value="'+esc(g.day||'')+'" onchange="ospSyncProdDay()"></div>'
-    +'<div><div class="flbl" style="font-size:0.7rem">Prod Day</div><input class="finput" type="date" id="osp-prodday" value="'+esc(g.prodDay||g.day||'')+'"></div>'
+    +'<div><div class="flbl" style="font-size:0.7rem">Day</div><input class="finput" type="date" id="osp-day" value="'+esc(g.day||'')+'" onchange="ospSyncProdDay()" data-no-prefill="1"></div>'
+    +'<div><div class="flbl" style="font-size:0.7rem">Prod Day</div><input class="finput" type="date" id="osp-prodday" value="'+esc(g.prodDay||g.day||'')+'" data-no-prefill="1"></div>'
     +'</div>';
 
   // B — AUTORI
@@ -5753,17 +5817,8 @@ function showOspiteModal(g, isNew){
     +'</div>'
     +textarea('Note/Props','osp-note-props',g.noteProps,80);
 
-  // G — EXTRA
-  var rankOpts='';
-  [0,1,2,3,4,5,6,7,8,9].forEach(function(n){
-    rankOpts+='<option value="'+n+'"'+((g.ranking||0)===n?' selected':'')+'>'+(n===0?'— nessun ranking':n)+'</option>';
-  });
   html+=areaHeader('G','Extra')
-    +'<div style="display:grid;grid-template-columns:140px 1fr;gap:0.6rem;align-items:start">'
-    +'<div><div class="flbl" style="font-size:0.7rem">Ranking S5 (1–9)</div>'
-    +'<select class="fselect" id="osp-ranking">'+rankOpts+'</select></div>'
-    +'<div>'+textarea('Extra','osp-extra',g.extra,50)+'</div>'
-    +'</div>';
+    +'<div>'+textarea('Extra','osp-extra',g.extra,50)+'</div>';
 
   html+='</div><div>';
 
@@ -5786,7 +5841,7 @@ function showOspiteModal(g, isNew){
     +(!isNew?'<button class="btn" style="background:#c0392b;color:#fff" id="osp-del-btn">Elimina</button>':'<div></div>')
     +'<div style="display:flex;gap:0.5rem">'
     +'<button class="btn" style="background:var(--bg3)" id="osp-cancel-btn">Annulla</button>'
-    +(!isNew?'<button class="btn" style="background:var(--bg3)" id="osp-add-puntata-btn">➕ Aggiungi in puntata</button>':'')
+    +(!isNew?'<button class="btn btn-primary" style="background:var(--acc);color:#fff;border-color:var(--acc)" id="osp-add-puntata-btn">➕ Aggiungi in puntata</button>':'')
     +'<button class="btn btn-primary" id="osp-save-btn">Salva</button>'
     +'</div></div>'
     +'</div>';
@@ -5835,7 +5890,7 @@ function showOspiteModal(g, isNew){
     g.preshow=overlay.querySelector('#osp-preshow').value;
     g.noteProps=overlay.querySelector('#osp-note-props').value;
     g.extra=overlay.querySelector('#osp-extra').value;
-    var rankEl=overlay.querySelector('#osp-ranking'); if(rankEl) g.ranking=parseInt(rankEl.value)||0;
+    var rankEl=overlay.querySelector('#osp-ranking-top'); if(rankEl) g.ranking=parseInt(rankEl.value)||0;
     g.telefono=overlay.querySelector('#osp-telefono').value;
     g.email=overlay.querySelector('#osp-email').value;
     g.secNome=overlay.querySelector('#osp-sec-nome').value;
@@ -6572,7 +6627,7 @@ function bootApp(){
 ═══════════════════════════════════ */
 // Prefill empty date fields with today on first focus
 document.addEventListener('focusin', function(e){
-  if(e.target.type==='date' && !e.target.value){
+  if(e.target.type==='date' && !e.target.value && !e.target.dataset.noPrefill){
     var today=new Date();
     e.target.value=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
     e.target.dispatchEvent(new Event('input',{bubbles:true}));
