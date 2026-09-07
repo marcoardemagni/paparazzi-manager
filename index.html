@@ -3177,9 +3177,11 @@ function renderEpisodeView(){
     var hasSecs=S.sections.some(function(s){ return s.assignment&&s.assignment.date===iso; });
     var clickAttr=hasSecs?' onclick="openVistaPuntata(\''+iso+'\')" style="cursor:pointer" title="Apri vista puntata"':' style="opacity:0.45"';
     h+='<td class="ep-th"'+clickAttr+'>'
-      +'<div class="ep-th-day">'+DAYS[i]+'</div>'
-      +'<div class="ep-th-date">'+d.getDate()+' '+MONTHS[d.getMonth()]+'</div>'
-      +(hasSecs?'<div style="font-family:var(--mono);font-size:0.55rem;color:var(--acc);margin-top:3px">▶ apri</div>':'')
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:0.4rem;flex-wrap:wrap">'
+      +'<span class="ep-th-day">'+DAYS[i]+'</span>'
+      +'<span class="ep-th-date">'+d.getDate()+' '+MONTHS[d.getMonth()]+'</span>'
+      +(hasSecs?'<span style="font-family:var(--mono);font-size:0.55rem;color:var(--acc)">▶ apri</span>':'')
+      +'</div>'
       +'</td>';
   });
   h+='</tr>';
@@ -5161,17 +5163,25 @@ function aggiungiInPuntata(btn){
   // Mark as treated
   ev.trattato=true;
   ev.trattatoData=epDate;
+  ev.updatedAt=Date.now();
 
   // If event is new, add it
   if(!existingEvInModal){
     if(!S.calEvents) S.calEvents=[];
     S.calEvents.push(ev);
+  } else {
+    // Ensure the existing event in the array is updated (not just the local copy)
+    var idx=S.calEvents.findIndex(function(e){ return e.id===ev.id; });
+    if(idx>=0) S.calEvents[idx]=ev;
   }
 
   // If "rimuovi dalle altre date": restrict the event to only the chosen episode date
   if(rimuoviAltreDate){
     ev.dateStart=epDate;
     ev.dateEnd=epDate;
+    // Update array again after date change
+    var idx2=S.calEvents.findIndex(function(e){ return e.id===ev.id; });
+    if(idx2>=0) S.calEvents[idx2]=ev;
   }
 
   // Build the new section
