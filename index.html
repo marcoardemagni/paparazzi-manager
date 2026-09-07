@@ -198,11 +198,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .ep-cell:last-child{border-right:none}
 .ep-slot{
   background:var(--bg3);border:1px solid var(--brd);border-radius:4px;
+  border-left:3px solid #555;
   padding:0.3rem 0.45rem;margin-bottom:4px;cursor:pointer;transition:all 0.12s;
 }
 .ep-slot:hover{border-color:var(--brd2);background:var(--surfl)}
 .ep-slot:last-child{margin-bottom:0}
-.ep-slot-blocco{font-family:var(--mono);font-size:0.58rem;color:var(--text3);margin-bottom:2px}
 .ep-slot-title{font-size:0.75rem;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ep-slot-dots{display:flex;gap:2px;margin-top:3px}
 .ep-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
@@ -918,6 +918,13 @@ function shiftDay(iso, n){
   while((d.getDay()===0||d.getDay()===6)&&safety<10){ d.setDate(d.getDate()+dir); safety++; }
   return dateToIso(d);
 }
+var TYPE_BORDER_COLORS={
+  trending:'#4ade80', hotstuff:'#f87171', ospite:'#c084fc',
+  bandierina:'#60a5fa', domandone:'#facc15',
+  'domandone-relaunch':'#facc15', 'domandone-answer':'#facc15'
+};
+function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
+
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
@@ -1668,11 +1675,10 @@ function openVistaPuntata(iso){
         +'<button class="btn" style="font-size:0.6rem;padding:1px 5px;line-height:1" data-id="'+s.id+'" data-iso="'+iso+'" data-type="'+t+'" onclick="vpMoveDown(this.dataset.id,this.dataset.iso,this.dataset.type);event.stopPropagation()">▼</button>'
         +'</div>';
     }
-    h+='<div class="vp-row'+(isConflict?' vp-row-conflict':'')+'" onclick="openSection(\''+s.id+'\')" title="Apri sezione">'
+    h+='<div class="vp-row'+(isConflict?' vp-row-conflict':'')+'" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[t]||t)+'" style="border-left:3px solid '+typeBorderColor(t)+'">'
       +'<div class="vp-row-num">'+blockNum+'</div>'
       +'<div class="vp-row-body">'
-      +'<div class="vp-row-type">'+esc(typeLabel)+'</div>'
-      +'<div class="vp-row-title">'+esc(rowTitle)+'</div>'
+      +'<div class="vp-row-title" style="color:'+typeBorderColor(t)+'">'+esc(rowTitle)+'</div>'
       +(meta.length?'<div class="vp-row-meta">'+esc(meta.join(' · '))+'</div>':'')
       +'</div>'
       +'<div class="vp-row-badges">'+badges+reorderBtns+'</div>'
@@ -3206,9 +3212,8 @@ function renderEpisodeView(){
         if(s.script&&s.script.status&&s.script.status!=='standby') dots+='<div class="ep-dot" style="background:var(--s-'+s.script.status+')"></div>';
         if(s.rvm&&s.rvm.needed) dots+='<div class="ep-dot" style="background:var(--s-'+(s.rvm.status||'richiesto')+')"></div>';
         if(s.foto) s.foto.forEach(function(f){ dots+='<div class="ep-dot" style="background:var(--s-'+(f.status||'standby')+')"></div>'; });
-        inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="Apri sezione">'
-          +'<div class="ep-slot-blocco">'+(TYPE_LABELS[s.type]||s.type)+'</div>'
-          +'<div class="ep-slot-title">'+(s.title||'&mdash;')+'</div>'
+        inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[s.type]||s.type)+'" style="border-left-color:'+typeBorderColor(s.type)+';">'
+          +'<div class="ep-slot-title" style="color:'+typeBorderColor(s.type)+'">'+(s.title||'&mdash;')+'</div>'
           +'<div class="ep-slot-dots">'+dots+'</div>'
           +'</div>';
       } else {
@@ -6342,13 +6347,13 @@ function doChangeUser(){
   // Show user selector overlay without requiring password again
   var members=getTeamMembers();
   var overlay=document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   var opts=members.map(function(m){
-    return '<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();renderSections()" style="width:100%;text-align:left;padding:0.5rem 0.8rem;background:'+(CURRENT_USER===m?'var(--acc)':'var(--bg3)')+';color:'+(CURRENT_USER===m?'#fff':'inherit')+';border:1px solid var(--brd);border-radius:6px;cursor:pointer;font-size:0.9rem;margin-bottom:0.4rem">'+m+'</button>';
+    return '<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();renderSections()" style="width:100%;text-align:left;padding:0.6rem 0.9rem;background:'+(CURRENT_USER===m?'var(--acc)':'#fff')+';color:'+(CURRENT_USER===m?'#fff':'#1a1a2e')+';border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600;margin-bottom:0.4rem">'+m+'</button>';
   }).join('');
-  overlay.innerHTML='<div style="background:var(--bg2);border-radius:14px;padding:1.5rem;width:280px;box-shadow:0 8px 40px rgba(0,0,0,0.5)">'
-    +'<div style="font-weight:800;font-size:1rem;margin-bottom:1rem;text-align:center">👤 Chi sei?</div>'
+  overlay.innerHTML='<div style="background:#ffffff;border-radius:14px;padding:1.8rem;width:300px;box-shadow:0 8px 40px rgba(0,0,0,0.25)">'
+    +'<div style="font-weight:800;font-size:1rem;margin-bottom:1rem;text-align:center;color:#1a1a2e">👤 Chi sei?</div>'
     +opts+'</div>';
   document.body.appendChild(overlay);
 }
@@ -6437,15 +6442,14 @@ function renderDayView(){
 
     const fonte=sec.fonte?`<div class="sc-row-fonte">🔗 <a href="${esc(sec.fonte)}" target="_blank" onclick="event.stopPropagation()">${esc(sec.fonte)}</a></div>`:'';
 
-    return `<div class="sc-row" onclick="openSection('${sec.id}')">
+    return `<div class="sc-row" onclick="openSection('${sec.id}')" style="border-left:3px solid ${typeBorderColor(sec.type)}" title="${TYPE_LABELS[sec.type]||sec.type}">
       <div class="sc-row-blocco">
         <div class="sc-row-blocco-num">${sec.assignment.blocco}</div>
         <div class="sc-row-blocco-lbl">blocco</div>
       </div>
       <div class="sc-row-body">
         <div class="sc-row-top">
-          <div class="sc-row-type">${TYPE_LABELS[sec.type]||sec.type}</div>
-          <div class="sc-row-title">${sec.title||'<em style="opacity:0.4">Senza titolo</em>'}</div>
+          <div class="sc-row-title" style="color:${typeBorderColor(sec.type)}">${sec.title||'<em style="opacity:0.4">Senza titolo</em>'}</div>
           ${sec.responsabile?`<div class="sc-row-resp">👤 ${esc(sec.responsabile)}</div>`:''}
         </div>
         <div class="sc-row-elems">${pillsHtml}</div>
@@ -6520,14 +6524,20 @@ function showPasswordGate(){
 function showUserSelector(){
   var members=getTeamMembers();
   var opts=members.map(function(m){
-    return '<button onclick="selectUser(\''+m+'\')" style="width:100%;text-align:left;padding:0.5rem 0.8rem;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;cursor:pointer;font-size:0.9rem;margin-bottom:0.4rem;transition:background 0.15s" onmouseenter="this.style.background=\'var(--surfl)\'" onmouseleave="this.style.background=\'var(--bg3)\'">'+m+'</button>';
+    return '<button onclick="selectUser(\''+m+'\')" style="width:100%;text-align:left;padding:0.6rem 0.9rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600;margin-bottom:0.4rem" onmouseenter="this.style.background=\'#f0f0f0\'" onmouseleave="this.style.background=\'#fff\'">'+m+'</button>';
   }).join('');
   var gate=document.getElementById('pwd-gate');
-  if(gate) gate.querySelector('div').innerHTML=''
-    +'<div style="font-size:1.6rem;margin-bottom:0.3rem">👤</div>'
-    +'<div style="font-weight:800;font-size:1.1rem;margin-bottom:0.3rem;letter-spacing:0.04em">Chi sei?</div>'
-    +'<div style="font-size:0.8rem;opacity:0.5;margin-bottom:1.2rem">Seleziona il tuo nome</div>'
-    +'<div style="text-align:left">'+opts+'</div>';
+  if(!gate) return;
+  gate.style.background='rgba(0,0,0,0.45)';
+  var inner=gate.querySelector('div');
+  if(inner){
+    inner.style.cssText='background:#ffffff;border-radius:14px;padding:1.8rem;width:300px;box-shadow:0 8px 40px rgba(0,0,0,0.25);text-align:center';
+    inner.innerHTML=''
+      +'<div style="font-size:1.6rem;margin-bottom:0.3rem">👤</div>'
+      +'<div style="font-weight:800;font-size:1.1rem;margin-bottom:0.3rem;letter-spacing:0.04em;color:#1a1a2e">Chi sei?</div>'
+      +'<div style="font-size:0.8rem;color:#888;margin-bottom:1.2rem">Seleziona il tuo nome</div>'
+      +'<div style="text-align:left">'+opts+'</div>';
+  }
 }
 
 function selectUser(name){
@@ -6584,29 +6594,33 @@ function bootApp(){
   CURRENT_USER=getCurrentUser();
   var uEl=document.getElementById('hdr-user');
   if(uEl) uEl.textContent='👤 '+(CURRENT_USER||'—');
-  // If no user selected yet, show selector
-  if(!CURRENT_USER){
-    setTimeout(function(){
-      var gate=document.createElement('div');
-      gate.id='pwd-gate';
-      gate.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
-      document.body.appendChild(gate);
-      showUserSelector();
-    }, 500);
-  }
 
   if(window.firebase_firestore){
     // Show a loading overlay — don't render from localStorage until Firestore responds
     var bootOverlay=document.createElement('div');
     bootOverlay.id='boot-overlay';
-    bootOverlay.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem';
-    bootOverlay.innerHTML='<div style="font-family:var(--mono);font-size:0.9rem;color:var(--text2)">☁ Carico dati dal cloud…</div>'
-      +'<div style="font-family:var(--mono);font-size:0.7rem;color:var(--text3)">Attendere prego</div>';
+    bootOverlay.style.cssText='position:fixed;inset:0;background:#1a1a2e;z-index:99998;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem';
+    bootOverlay.innerHTML='<div style="font-family:monospace;font-size:0.9rem;color:#a0a0c0">☁ Carico dati dal cloud…</div>'
+      +'<div style="font-family:monospace;font-size:0.7rem;color:#606080">Attendere prego</div>';
     document.body.appendChild(bootOverlay);
 
+    // Safety timeout: remove overlay after 8 seconds no matter what
+    var bootTimeout=setTimeout(function(){
+      var o=document.getElementById('boot-overlay'); if(o) o.remove();
+    }, 8000);
+
     cloudLoad(true, function(){
+      clearTimeout(bootTimeout);
       var o=document.getElementById('boot-overlay');
       if(o) o.remove();
+      // Show user selector after data is loaded, if no user selected yet
+      if(!CURRENT_USER){
+        var gate=document.createElement('div');
+        gate.id='pwd-gate';
+        gate.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
+        document.body.appendChild(gate);
+        showUserSelector();
+      }
     });
     setTimeout(migrateFromMain, 2000);
     setInterval(function(){
