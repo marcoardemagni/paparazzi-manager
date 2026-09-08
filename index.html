@@ -3409,31 +3409,44 @@ function exportDomandoneSettimanale(){
       spacing:{before:400,after:200}
     }));
 
-    // Domandone Answer
-    var domAnswer=daySecs.find(function(s){
+    // Domandone Answer — legge i dati dalla sezione domandone principale
+    var mainDom=daySecs.find(function(s){
       var ti=(s.title||'').toLowerCase();
-      return s.type==='domandone'&&ti.includes('answer');
+      return s.type==='domandone'&&!ti.includes('relaunch')&&!ti.includes('answer');
     });
-    if(domAnswer){
+    var adq=mainDom&&mainDom.script&&mainDom.script.domandone||null;
+    if(adq&&adq.domanda){
       children.push(new d.Paragraph({
         text:'DOMANDONE + RISPOSTA',
         heading: d.HeadingLevel.HEADING_2,
         spacing:{before:200,after:100}
       }));
-      var dialogo=(domAnswer.script&&domAnswer.script.dialogo)||'';
-      if(dialogo){
-        dialogo.split('\n').forEach(function(line){
-          children.push(new d.Paragraph({
-            children:[new d.TextRun({text:line||' '})],
-            spacing:{before:0,after:80}
-          }));
-        });
-      } else {
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:adq.domanda,bold:true})],
+        spacing:{before:0,after:80}
+      }));
+      ['opt1','opt2','opt3','opt4'].forEach(function(k,i){
+        if(adq[k]) children.push(new d.Paragraph({
+          children:[new d.TextRun({text:String.fromCharCode(65+i)+') '+adq[k].replace(/^[A-D][):.\s]+/,'')})],
+          spacing:{before:0,after:60}
+        }));
+      });
+      if(adq.risposta){
         children.push(new d.Paragraph({
-          children:[new d.TextRun({text:'(dialogo non ancora inserito)',color:'888888',italics:true})],
-          spacing:{after:80}
+          children:[new d.TextRun({text:'✓ '+adq.risposta,bold:true})],
+          spacing:{before:80,after:80}
         }));
       }
+    } else {
+      children.push(new d.Paragraph({
+        text:'DOMANDONE + RISPOSTA',
+        heading: d.HeadingLevel.HEADING_2,
+        spacing:{before:200,after:100}
+      }));
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:'(domandone non ancora inserito)',color:'888888',italics:true})],
+        spacing:{after:80}
+      }));
     }
 
     // Foto richieste SOLO dalla sezione bandierina
