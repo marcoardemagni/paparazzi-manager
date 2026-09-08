@@ -2604,6 +2604,77 @@ function copyTrDialogo(){
   else{ el.select(); document.execCommand('copy'); }
 }
 
+function generaDomandone(secId){
+  var sec=S.sections.find(function(s){ return s.id===secId; });
+  if(!sec) return;
+  var st=document.getElementById('dom-gen-status');
+  if(st) st.textContent='Genero il domandone…';
+
+  // Gather context: notes, bandierina of same episode, calendar events of same date
+  var note=document.getElementById('f-script-notes').value||sec.script.notes||'';
+  var epDate=sec.assignment&&sec.assignment.date||'';
+  var context='';
+
+  if(epDate){
+    // Bandierina of same episode
+    var bf=S.sections.find(function(s){ return s.assignment&&s.assignment.date===epDate&&s.type==='bandierina'; });
+    if(bf&&bf.title) context+='Bandierina del giorno: '+bf.title+'\n';
+
+    // Calendar events of same date
+    var calEvs=(S.calEvents||[]).filter(function(ev){
+      return ev.dateStart<=epDate&&(!ev.dateEnd||ev.dateEnd>=epDate);
+    }).slice(0,5);
+    if(calEvs.length) context+='Eventi in calendario: '+calEvs.map(function(e){ return e.title; }).join(', ')+'\n';
+  }
+
+  var systemPrompt='Sei un autore di un programma televisivo italiano bilingue chiamato Paparazzi!, trasmesso su Rai Italia. '
+    +'Il "Domandone" è una domanda a quiz con 4 opzioni di risposta (A, B, C, D) su un argomento legato all\'Italia o alla cultura italiana. '
+    +'La domanda deve essere stimolante, non banale, ma accessibile al grande pubblico. '
+    +'Rispondi SOLO con JSON nel formato: {"domanda":"...","opt1":"...","opt2":"...","opt3":"...","opt4":"...","risposta":"Opzione X: ..."}';
+
+  var userPrompt='Genera un Domandone per la puntata del '+epDate+'.\n'
+    +(context?'Contesto:\n'+context+'\n':'')
+    +(note?'Note del redattore:\n'+note+'\n':'')
+    +'La risposta corretta deve essere una delle quattro opzioni. Tutte le opzioni devono essere plausibili.';
+
+  callClaude({
+    model:'claude-sonnet-4-6',
+    max_tokens:600,
+    system:systemPrompt,
+    messages:[{role:'user',content:userPrompt}]
+  }).then(function(data){
+    var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    try{
+      var clean=txt.replace(/```json|```/g,'').trim();
+      var result=JSON.parse(clean);
+      if(!sec.script.domandone) sec.script.domandone={};
+      sec.script.domandone.domanda=result.domanda||'';
+      sec.script.domandone.opt1=result.opt1||'';
+      sec.script.domandone.opt2=result.opt2||'';
+      sec.script.domandone.opt3=result.opt3||'';
+      sec.script.domandone.opt4=result.opt4||'';
+      sec.script.domandone.risposta=result.risposta||'';
+      markModified(sec.id);
+      save();
+      // Update fields in UI
+      var fields={
+        'f-dq-domanda':result.domanda,'f-dq-opt1':result.opt1,'f-dq-opt2':result.opt2,
+        'f-dq-opt3':result.opt3,'f-dq-opt4':result.opt4,'f-dq-risposta':result.risposta
+      };
+      Object.keys(fields).forEach(function(id){
+        var el=document.getElementById(id);
+        if(el) el.value=fields[id]||'';
+      });
+      if(st) st.textContent='✓ Domandone generato';
+    } catch(e){
+      if(st) st.textContent='Errore nel parsing della risposta.';
+      console.error(e, txt);
+    }
+  }).catch(function(){
+    if(st) st.textContent='Errore di rete. Riprova.';
+  });
+}
+
 function generaDialogoTrending(secId){
   var sec=S.sections.find(function(s){ return s.id===secId; });
   if(!sec) return;
@@ -3613,14 +3684,16 @@ function renderPanelBody(sec){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem">'
       +'<div><div class="flbl">Opzione 1</div><textarea class="ftextarea" id="f-dq-opt1" placeholder="…" style="min-height:38px">'+esc(dq.opt1||'')+'</textarea></div>'
       +'<div><div class="flbl">Opzione 2</div><textarea class="ftextarea" id="f-dq-opt2" placeholder="…" style="min-height:38px">'+esc(dq.opt2||'')+'</textarea></div>'
-      +'<div><div class="flbl">Opzione 3</div><textarea class="ftextarea" id="f-dq-opt3" placeholder="…" style="min-height:38px">'+esc(dq.opt3||'')+'</textarea></div>'
+      +'<div><div class="flbl">Opzione 3</div><textarea class="flbl">Opzione 3</div><textarea class="ftextarea" id="f-dq-opt3" placeholder="…" style="min-height:38px">'+esc(dq.opt3||'')+'</textarea></div>'
       +'<div><div class="flbl">Opzione 4</div><textarea class="ftextarea" id="f-dq-opt4" placeholder="…" style="min-height:38px">'+esc(dq.opt4||'')+'</textarea></div>'
       +'</div>'
       +'<div class="flbl" style="margin-top:0.5rem">Risposta corretta</div>'
       +'<input class="finput" id="f-dq-risposta" placeholder="es. Opzione 2 oppure testo della risposta…" value="'+esc(dq.risposta||'')+'">'
-      +'<div style="margin-top:0.8rem;padding-top:0.7rem;border-top:1px solid var(--brd)">'
-      +'<button class="btn" style="font-size:0.78rem;width:100%" onclick="syncDomandone()">🔄 Sincronizza domanda e opzioni → Relaunch &amp; Answer</button>'
+      +'<div style="margin-top:0.8rem;padding-top:0.7rem;border-top:1px solid var(--brd);display:flex;gap:0.5rem;flex-wrap:wrap">'
+      +'<button class="btn btn-primary" style="font-size:0.78rem" data-secid="'+sec.id+'" onclick="generaDomandone(this.dataset.secid)">🤖 Genera domandone</button>'
+      +'<button class="btn" style="font-size:0.78rem;flex:1" onclick="syncDomandone()">🔄 Sincronizza → Relaunch &amp; Answer</button>'
       +'</div>'
+      +'<div id="dom-gen-status" style="font-size:0.75rem;color:var(--text3);margin-top:0.3rem"></div>'
       +'<div class="flbl" style="margin-top:0.6rem">Note aggiuntive</div>'
       +'<textarea class="ftextarea" id="f-script-notes" placeholder="Fonte, contesto, note…">'+esc(sec.script.notes)+'</textarea>'
       +'</div>';
