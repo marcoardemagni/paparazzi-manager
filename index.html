@@ -3410,7 +3410,10 @@ function exportDomandoneSettimanale(){
     }));
 
     // Domandone Answer
-    var domAnswer=daySecs.find(function(s){ return s.type==='domandone-answer'; });
+    var domAnswer=daySecs.find(function(s){
+      var ti=(s.title||'').toLowerCase();
+      return s.type==='domandone'&&ti.includes('answer');
+    });
     if(domAnswer){
       children.push(new d.Paragraph({
         text:'DOMANDONE + RISPOSTA',
@@ -3433,15 +3436,14 @@ function exportDomandoneSettimanale(){
       }
     }
 
-    // Foto richieste per tutti i blocchi del giorno
+    // Foto richieste SOLO dalla sezione bandierina
+    var bandierina=daySecs.find(function(s){ return s.type==='bandierina'; });
     var fotoItems=[];
-    daySecs.forEach(function(s){
-      if(s.foto&&s.foto.length){
-        s.foto.forEach(function(f){
-          if(f.status!=='dialogato') fotoItems.push({sec:s, foto:f});
-        });
-      }
-    });
+    if(bandierina&&bandierina.foto&&bandierina.foto.length){
+      bandierina.foto.forEach(function(f){
+        if(f.status!=='dialogato') fotoItems.push({sec:bandierina, foto:f});
+      });
+    }
 
     if(fotoItems.length){
       children.push(new d.Paragraph({
