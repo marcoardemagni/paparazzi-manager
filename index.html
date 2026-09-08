@@ -2610,21 +2610,15 @@ function generaDomandone(secId){
   var st=document.getElementById('dom-gen-status');
   if(st) st.textContent='Genero il domandone…';
 
-  // Gather context: notes, bandierina of same episode, calendar events of same date
+  // Gather context: bandierina of same episode only
   var note=document.getElementById('f-script-notes').value||sec.script.notes||'';
   var epDate=sec.assignment&&sec.assignment.date||'';
   var context='';
 
   if(epDate){
-    // Bandierina of same episode
     var bf=S.sections.find(function(s){ return s.assignment&&s.assignment.date===epDate&&s.type==='bandierina'; });
-    if(bf&&bf.title) context+='Bandierina del giorno: '+bf.title+'\n';
-
-    // Calendar events of same date
-    var calEvs=(S.calEvents||[]).filter(function(ev){
-      return ev.dateStart<=epDate&&(!ev.dateEnd||ev.dateEnd>=epDate);
-    }).slice(0,5);
-    if(calEvs.length) context+='Eventi in calendario: '+calEvs.map(function(e){ return e.title; }).join(', ')+'\n';
+    if(bf&&bf.title) context+='L\'argomento della puntata (bandierina) è: '+bf.title+'\n';
+    if(bf&&bf.note) context+='Note sulla bandierina: '+bf.note+'\n';
   }
 
   var systemPrompt='Sei un autore di un programma televisivo italiano bilingue chiamato Paparazzi!, trasmesso su Rai Italia. '
@@ -3684,7 +3678,7 @@ function renderPanelBody(sec){
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.5rem">'
       +'<div><div class="flbl">Opzione 1</div><textarea class="ftextarea" id="f-dq-opt1" placeholder="…" style="min-height:38px">'+esc(dq.opt1||'')+'</textarea></div>'
       +'<div><div class="flbl">Opzione 2</div><textarea class="ftextarea" id="f-dq-opt2" placeholder="…" style="min-height:38px">'+esc(dq.opt2||'')+'</textarea></div>'
-      +'<div><div class="flbl">Opzione 3</div><textarea class="flbl">Opzione 3</div><textarea class="ftextarea" id="f-dq-opt3" placeholder="…" style="min-height:38px">'+esc(dq.opt3||'')+'</textarea></div>'
+      +'<div><div class="flbl">Opzione 3</div><textarea class="ftextarea" id="f-dq-opt3" placeholder="…" style="min-height:38px">'+esc(dq.opt3||'')+'</textarea></div>'
       +'<div><div class="flbl">Opzione 4</div><textarea class="ftextarea" id="f-dq-opt4" placeholder="…" style="min-height:38px">'+esc(dq.opt4||'')+'</textarea></div>'
       +'</div>'
       +'<div class="flbl" style="margin-top:0.5rem">Risposta corretta</div>'
