@@ -4466,9 +4466,10 @@ function syncDomandone(){
   // Save current form first
   collectForm(sec);
   var dq=sec.script.domandone||{};
-  // Find the other domandone on the same episode date (by episodeDate)
+  var epDate=sec.assignment&&sec.assignment.date;
+  if(!epDate){ alert('Questa sezione non è assegnata a nessuna puntata.'); return; }
   var targets=S.sections.filter(function(s){
-    return s.id!==sec.id && s.type==='domandone' && s.episodeDate===sec.episodeDate;
+    return s.id!==sec.id && s.type==='domandone' && s.assignment&&s.assignment.date===epDate;
   });
   if(!targets.length){ alert('Nessun altro Domandone trovato per questa puntata.'); return; }
   targets.forEach(function(t){
