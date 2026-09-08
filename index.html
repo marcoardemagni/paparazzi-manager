@@ -603,6 +603,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="day-today-btn" onclick="epGoToNearest()">Vai alle sezioni</button>
       <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="openGeneraProposte()">🤖 Proposte Trending</button>
       <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="exportSettimanaExcel()">↓ Excel settimana</button>
+      <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="exportDomandoneSettimanale()">📄 Domandone+Foto</button>
+      <button class="btn" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="exportGiornalieroRVM()">📋 Foto+RVM+Props</button>
       <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="newEpisode()">+ Nuova Puntata</button>
     </div>
     <table class="ep-grid" id="epGrid" style="width:100%;border-collapse:collapse"></table>
@@ -1080,34 +1082,26 @@ function cloudSave(){
         if(Array.isArray(remoteArr) && Array.isArray(localArr)){
           var deletedIds=S.deletedIds||[];
 
-          // Build map of remote items by id
+          // Remote is the base — always trust Firestore
           var remoteMap = {};
           remoteArr.forEach(function(item){ if(item&&item.id) remoteMap[item.id]=item; });
 
-          // For each local item: if newer than remote → use local, else keep remote
-          var localMap = {};
+          // Local wins ONLY if this item was explicitly modified in this session
           localArr.forEach(function(item){
             if(!item||!item.id) return;
-            localMap[item.id]=item;
-            var remote=remoteMap[item.id];
-            if(!remote || (item.updatedAt||0) >= (remote.updatedAt||0)){
-              remoteMap[item.id]=item;
+            if(_locallyModified.has(item.id)){
+              remoteMap[item.id]=item; // we touched it — our version wins
+            } else if(!remoteMap[item.id]){
+              remoteMap[item.id]=item; // new item not yet on Firestore
             }
+            // else: remote wins — touched by someone else
           });
 
-          // Add remote-only items UNLESS they were deleted locally
-          remoteArr.forEach(function(item){
-            if(item&&item.id&&!localMap[item.id]&&!deletedIds.includes(item.id)){
-              remoteMap[item.id]=item;
-            }
-          });
-
-          // Remove deleted items from merged result
+          // Remove deleted items
           deletedIds.forEach(function(id){ delete remoteMap[id]; });
 
           merged[key] = Object.values(remoteMap);
-        // Persist deletedIds so other clients also know what was deleted
-        merged.deletedIds = Array.from(new Set((existing.deletedIds||[]).concat(S.deletedIds||[])));
+          merged.deletedIds = Array.from(new Set((existing.deletedIds||[]).concat(S.deletedIds||[])));
         } else {
           merged[key] = localArr;
         }
@@ -1129,6 +1123,10 @@ function cloudSave(){
 }
 
 var _cloudLoaded=false;
+var _locallyModified=new Set(); // IDs modified in this session
+
+// Call this whenever we modify a section/event/guest locally
+function markModified(id){ if(id) _locallyModified.add(id); }
 
 function cloudLoad(force, callback){
   var db=getFirestore(); if(!db){ setSyncInd('err','Firebase non pronto'); if(callback) callback(); return; }
@@ -1281,6 +1279,7 @@ function updateProdStatus(){
   var dataRic=document.getElementById('ps-data-ric').value||'';
   sec.prodStatus={fattibile:c1,dataRicezione:dataRic,grezzoRicevuto:c2,inMontaggio:c3,pronto:c4};
   sec.updatedAt=Date.now();
+  markModified(sec.id);
   save();
   // Re-render panel to update enabled/disabled states
   renderPanelBody(sec);
@@ -3318,11 +3317,227 @@ function exportSettimanaExcel(){
 }
 
 /* ═══════════════════════════════════
+   EXPORT DOMANDONE+FOTO (settimanale)
+═══════════════════════════════════ */
+function exportDomandoneSettimanale(){
+  var dates=weekDates(epWeek);
+  if(!dates||!dates.length){ alert('Nessuna settimana visualizzata.'); return; }
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var d=window.docx;
+  if(!d){ alert('Libreria docx non disponibile.'); return; }
+
+  var children=[];
+
+  dates.forEach(function(date){
+    var iso=dateToIso(date);
+    var daySecs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
+    daySecs=sortSezioniPuntata(daySecs);
+    if(!daySecs.length) return;
+
+    var dayLabel=DAYS_IT[date.getDay()]+' '+date.getDate()+' '+MONTHS_IT[date.getMonth()]+' '+date.getFullYear();
+
+    // Day header
+    children.push(new d.Paragraph({
+      text: dayLabel,
+      heading: d.HeadingLevel.HEADING_1,
+      spacing:{before:400,after:200}
+    }));
+
+    // Domandone Answer
+    var domAnswer=daySecs.find(function(s){ return s.type==='domandone-answer'; });
+    if(domAnswer){
+      children.push(new d.Paragraph({
+        text:'DOMANDONE + RISPOSTA',
+        heading: d.HeadingLevel.HEADING_2,
+        spacing:{before:200,after:100}
+      }));
+      var dialogo=(domAnswer.script&&domAnswer.script.dialogo)||'';
+      if(dialogo){
+        dialogo.split('\n').forEach(function(line){
+          children.push(new d.Paragraph({
+            children:[new d.TextRun({text:line||' '})],
+            spacing:{before:0,after:80}
+          }));
+        });
+      } else {
+        children.push(new d.Paragraph({
+          children:[new d.TextRun({text:'(dialogo non ancora inserito)',color:'888888',italics:true})],
+          spacing:{after:80}
+        }));
+      }
+    }
+
+    // Foto richieste per tutti i blocchi del giorno
+    var fotoItems=[];
+    daySecs.forEach(function(s){
+      if(s.foto&&s.foto.length){
+        s.foto.forEach(function(f){
+          if(f.status!=='dialogato') fotoItems.push({sec:s, foto:f});
+        });
+      }
+    });
+
+    if(fotoItems.length){
+      children.push(new d.Paragraph({
+        text:'FOTO RICHIESTE',
+        heading: d.HeadingLevel.HEADING_2,
+        spacing:{before:200,after:100}
+      }));
+      fotoItems.forEach(function(item,i){
+        children.push(new d.Paragraph({
+          children:[
+            new d.TextRun({text:'• ['+( item.sec.title||item.sec.type)+'] ',bold:true}),
+            new d.TextRun({text:item.foto.desc||'(senza descrizione)'})
+          ],
+          spacing:{before:0,after:80}
+        }));
+      });
+    }
+
+    // Separator
+    children.push(new d.Paragraph({
+      border:{bottom:{style:d.BorderStyle.SINGLE,size:6,color:'CCCCCC'}},
+      spacing:{before:200,after:200}
+    }));
+  });
+
+  if(children.length===0){ alert('Nessun contenuto per questa settimana.'); return; }
+
+  var doc=new d.Document({sections:[{properties:{},children:children}]});
+  var d0=dates[0];
+  var fname='Domandone_Foto_'+dateToIso(d0)+'.docx';
+  d.Packer.toBlob(doc).then(function(blob){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+  });
+}
+
+/* ═══════════════════════════════════
+   EXPORT FOTO+RVM+PROPS (giornaliero)
+═══════════════════════════════════ */
+function exportGiornalieroRVM(){
+  // Ask which day — use current week's first day with sections
+  var dates=weekDates(epWeek);
+  if(!dates||!dates.length){ alert('Nessuna settimana visualizzata.'); return; }
+
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+  // Build options for all days that have sections
+  var dayOptions=dates.map(function(date){
+    var iso=dateToIso(date);
+    var count=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; }).length;
+    return {iso:iso, date:date, count:count, label:DAYS_IT[date.getDay()]+' '+date.getDate()+' '+MONTHS_IT[date.getMonth()]};
+  }).filter(function(d){ return d.count>0; });
+
+  if(!dayOptions.length){ alert('Nessuna puntata in questa settimana.'); return; }
+
+  // Show day picker
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var opts=dayOptions.map(function(d){
+    return '<button onclick="doExportGiornaliero(\''+d.iso+'\');this.closest(\'div[style*=fixed]\').remove()" style="width:100%;text-align:left;padding:0.5rem 0.8rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;margin-bottom:0.4rem">'+d.label+' ('+d.count+' blocchi)</button>';
+  }).join('');
+  overlay.innerHTML='<div style="background:#fff;border-radius:14px;padding:1.5rem;width:300px;box-shadow:0 8px 40px rgba(0,0,0,0.3)">'
+    +'<div style="font-weight:800;font-size:1rem;margin-bottom:1rem;text-align:center;color:#1a1a2e">📋 Scegli il giorno</div>'
+    +opts+'</div>';
+  document.body.appendChild(overlay);
+}
+
+function doExportGiornaliero(iso){
+  var d=window.docx;
+  if(!d){ alert('Libreria docx non disponibile.'); return; }
+
+  var daySecs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
+  daySecs=sortSezioniPuntata(daySecs);
+
+  var nd=new Date(iso+'T12:00:00');
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var dayLabel=DAYS_IT[nd.getDay()]+' '+nd.getDate()+' '+MONTHS_IT[nd.getMonth()]+' '+nd.getFullYear();
+
+  var children=[];
+  children.push(new d.Paragraph({
+    text:'FOTO · RVM · PROPS — '+dayLabel,
+    heading:d.HeadingLevel.HEADING_1,
+    spacing:{before:0,after:300}
+  }));
+
+  daySecs.forEach(function(sec){
+    var hasFoto=sec.foto&&sec.foto.filter(function(f){ return f.status!=='dialogato'; }).length>0;
+    var hasRvm=(sec.rvm&&sec.rvm.needed)||(sec.rvms&&sec.rvms.some(function(r){ return r.needed; }));
+    var hasProps=sec.props&&sec.props.needed;
+    if(!hasFoto&&!hasRvm&&!hasProps) return;
+
+    // Section header
+    children.push(new d.Paragraph({
+      text:(TYPE_LABELS[sec.type]||sec.type).toUpperCase()+(sec.title?' — '+sec.title:''),
+      heading:d.HeadingLevel.HEADING_2,
+      spacing:{before:300,after:100}
+    }));
+
+    // Foto
+    if(hasFoto){
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:'FOTO RICHIESTE',bold:true,underline:{}})],
+        spacing:{before:100,after:60}
+      }));
+      sec.foto.filter(function(f){ return f.status!=='dialogato'; }).forEach(function(f,i){
+        children.push(new d.Paragraph({
+          children:[new d.TextRun({text:'F'+(i+1)+': '}),new d.TextRun({text:f.desc||'(senza descrizione)'})],
+          spacing:{before:0,after:60}
+        }));
+      });
+    }
+
+    // RVM
+    var rvmList=[];
+    if(sec.rvm&&sec.rvm.needed) rvmList.push(sec.rvm);
+    if(sec.rvms) sec.rvms.filter(function(r){ return r.needed; }).forEach(function(r){ rvmList.push(r); });
+    if(rvmList.length){
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:'RVM',bold:true,underline:{}})],
+        spacing:{before:100,after:60}
+      }));
+      rvmList.forEach(function(r,i){
+        var txt=(r.duration?r.duration+' — ':''+(r.notes||'(nessuna nota)'));
+        children.push(new d.Paragraph({
+          children:[new d.TextRun({text:'RVM'+(rvmList.length>1?(' '+(i+1)):'')+': '}),new d.TextRun({text:txt})],
+          spacing:{before:0,after:60}
+        }));
+      });
+    }
+
+    // Props
+    if(hasProps){
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:'PROPS',bold:true,underline:{}})],
+        spacing:{before:100,after:60}
+      }));
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:sec.props.notes||'(nessuna nota)'})],
+        spacing:{before:0,after:60}
+      }));
+    }
+  });
+
+  if(children.length<=1){ alert('Nessuna foto, RVM o props richiesti per questo giorno.'); return; }
+
+  var doc=new d.Document({sections:[{properties:{},children:children}]});
+  var fname='FotoRVMProps_'+iso+'.docx';
+  d.Packer.toBlob(doc).then(function(blob){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+  });
+}
+
+/* ═══════════════════════════════════
    PANEL OPEN / RENDER
 ═══════════════════════════════════ */
 function newSection(){
   const sec=mkSection();
   S.sections.push(sec);
+  markModified(sec.id);
   save();
   openSection(sec.id);
 }
@@ -4531,6 +4746,8 @@ function collectForm(){
     sec.assignment.blocco=parseInt(ab);
   }
   // note: foto/coperture descs updated live
+  var secToMark=S.sections.find(function(s){ return s.id===editingId; });
+  if(secToMark){ secToMark.updatedAt=Date.now(); markModified(secToMark.id); }
   save();
 }
 
