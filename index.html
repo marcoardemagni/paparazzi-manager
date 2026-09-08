@@ -4564,6 +4564,15 @@ function updateMediaDesc(type,i,v){
   const sec=S.sections.find(s=>s.id===editingId); if(!sec) return;
   sec[type][i].desc=v; save();
 }
+function aggiornaPreviewPuntataCalModal(iso){
+  var el=document.getElementById('cal-modal-puntata-preview');
+  if(!el||!iso) return;
+  var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
+  secs=sortSezioniPuntata(secs);
+  if(!secs.length){ el.textContent='Nessun blocco assegnato a questa data.'; return; }
+  el.textContent=secs.length+' blocchi: '+secs.map(function(s){ return (TYPE_LABELS[s.type]||s.type)+(s.title?' – '+s.title.slice(0,18):''); }).join(' · ');
+}
+
 function aggiornaPreviewPuntata(iso){
   var el=document.getElementById('puntata-preview-inline');
   if(!el||!iso) return;
@@ -5371,7 +5380,13 @@ function showCalModal(ev, isNew){
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">'
     +'<div><div class="flbl">Tipo sezione</div><select class="fselect" id="cev-sec-type">'+typeOpts+'</select></div>'
-    +'<div><div class="flbl">Data puntata</div><select class="fselect" id="cev-ep">'+epOpts+'</select></div>'
+    +'<div><div class="flbl">Data puntata</div>'
+    +'<div style="display:flex;gap:0.3rem;align-items:center">'
+    +'<select class="fselect" id="cev-ep" style="flex:1" onchange="aggiornaPreviewPuntataCalModal(this.value)">'+epOpts+'</select>'
+    +'<button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;flex-shrink:0" onclick="openPreviewPuntata(document.getElementById(\'cev-ep\').value)" title="Vedi stato puntata">👁</button>'
+    +'</div>'
+    +'<div id="cal-modal-puntata-preview" style="margin-top:0.3rem;font-size:0.72rem;color:var(--text3)"></div>'
+    +'</div>'
     +'</div>'
     +'<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;cursor:pointer;margin-top:0.3rem">'
     +'<input type="checkbox" id="cev-rimuovi-altre" checked style="accent-color:var(--acc)">'
