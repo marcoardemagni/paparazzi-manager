@@ -2621,15 +2621,15 @@ function generaDomandone(secId){
     if(bf&&bf.note) context+='Note sulla bandierina: '+bf.note+'\n';
   }
 
-  var systemPrompt='Sei un autore di un programma televisivo italiano bilingue chiamato Paparazzi!, trasmesso su Rai Italia. '
-    +'Il "Domandone" è una domanda a quiz con 4 opzioni di risposta (A, B, C, D) su un argomento legato all\'Italia o alla cultura italiana. '
-    +'La domanda deve essere stimolante, non banale, ma accessibile al grande pubblico. '
-    +'Rispondi SOLO con JSON nel formato: {"domanda":"...","opt1":"...","opt2":"...","opt3":"...","opt4":"...","risposta":"Opzione X: ..."}';
+  var systemPrompt='You are a writer for Paparazzi!, a bilingual Italian-English TV show on Rai Italia. '
+    +'The "Domandone" is a quiz question with 4 options (A, B, C, D) about Italy or Italian culture, aimed at a broad international audience. '
+    +'Keep the question and options SHORT and punchy — one or two sentences max each. '
+    +'Reply ONLY with JSON: {"domanda":"...","opt1":"A) ...","opt2":"B) ...","opt3":"C) ...","opt4":"D) ...","risposta":"Option X: ..."}';
 
-  var userPrompt='Genera un Domandone per la puntata del '+epDate+'.\n'
-    +(context?'Contesto:\n'+context+'\n':'')
-    +(note?'Note del redattore:\n'+note+'\n':'')
-    +'La risposta corretta deve essere una delle quattro opzioni. Tutte le opzioni devono essere plausibili.';
+  var userPrompt='Write a Domandone quiz question in English for the episode of '+epDate+'.\n'
+    +(context?'Context:\n'+context+'\n':'')
+    +(note?'Notes:\n'+note+'\n':'')
+    +'Make it engaging but not too obscure. All four options must be plausible.';
 
   callClaude({
     model:'claude-sonnet-4-6',
