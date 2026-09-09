@@ -3041,8 +3041,6 @@ function generaScalettaDocx(iso){
     if(tk==='lancio-trending') rows.push(bumperRow('BUMPER: TRENDING ITALY'));
     if(tk==='domandone-relaunch') rows.push(bumperRow('BUMPER: DOMANDONE RELAUNCH'));
     if(tk==='hotstuff'){ var si=secs.indexOf(s); var prev=si>0?secs[si-1]:null; if(!prev||prev.type!=='hotstuff') rows.push(bumperRow('BUMPER: HOT STUFF')); }
-    // lancio-trending is a pure bumper — don't count it as a numbered block
-    if(tk==='lancio-trending'){ rows.push(bumperRow('BUMPER TRENDING N° '+tCount)); return; }
 
     blockNum++;
     var dur=DEFAULT_DURATION[tk]||120;
