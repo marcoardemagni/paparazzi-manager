@@ -2675,6 +2675,31 @@ function generaDomandone(secId){
   });
 }
 
+function generaDialogoVuoto(secId){
+  var sec=S.sections.find(function(s){ return s.id===secId; });
+  if(!sec) return;
+  // Standard template: alternating Filippo/Arde lines, empty content
+  var template=[
+    'FILIPPO: ',
+    '',
+    'ARDE: ',
+    '',
+    'FILIPPO: ',
+    '',
+    'ARDE: ',
+    '',
+    'FILIPPO: Trending number X!'
+  ].join('\n\n');
+  if(!sec.script) sec.script={};
+  sec.script.dialogo=template;
+  markModified(sec.id);
+  save();
+  var el=document.getElementById('f-tr-dialogo');
+  if(el){ el.value=template; el.focus(); }
+  var st=document.getElementById('tr-gen-status');
+  if(st) st.textContent='Template vuoto inserito — scrivi il testo nelle righe Filippo e Arde';
+}
+
 function generaDialogoTrending(secId){
   var sec=S.sections.find(function(s){ return s.id===secId; });
   if(!sec) return;
@@ -2997,7 +3022,7 @@ function generaScalettaDocx(iso){
 
   function getTk(s){ var t=s.type,ti=(s.title||'').toLowerCase(); if(t==='domandone'){ if(ti.includes('relaunch')) return 'domandone-relaunch'; if(ti.includes('answer')) return 'domandone-answer'; return 'domandone';} return t; }
   function fmtTime(sec){ var m=Math.floor(sec/60),s=sec%60; return String(m).padStart(2,'0')+'.'+String(s).padStart(2,'0'); }
-  function getGrafica(tk,title){
+  function getGrafica(tk,title,sec){
     var b='WALL TORINO';
     var t=title||'';
     var map={
@@ -3010,12 +3035,25 @@ function generaScalettaDocx(iso){
       'temperature':'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA',
       'headlines':b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO',
       'lancio-trending':b,
-      'trending':b+'\n\nFOTO/VIDEO',
-      'hotstuff':b+'\n\nFOTO/VIDEO',
       'ospite':b+'\n\nFOTO/VIDEO',
       'poem':b+'\n\n\nARDE VA AL LEGGIO\n\n\n\n\nRULLO',
       'saluti':''
     };
+    // For trending and hotstuff: build real foto+rvm list from section data
+    if((tk==='trending'||tk==='hotstuff')&&sec){
+      var lines=[b,''];
+      var hasRvm=false;
+      if(sec.rvm&&sec.rvm.needed){ lines.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')); hasRvm=true; }
+      if(sec.rvms) sec.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){
+        lines.push('RVM'+(i+1)+(r.duration?' ('+r.duration+')':'')); hasRvm=true;
+      });
+      if(sec.foto&&sec.foto.length){
+        sec.foto.forEach(function(f,i){ lines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
+      } else if(!hasRvm){
+        lines.push('FOTO/VIDEO');
+      }
+      return lines.join('\n');
+    }
     return map[tk]||b;
   }
 
@@ -3091,15 +3129,12 @@ function generaScalettaDocx(iso){
     }
     else if(tk==='headlines'){ wp.push(mkPara('FILIPPO: [Press Review]')); wp.push(BLANK); wp.push(mkPara('FILIPPO COINVOLGE MARCO DURANTE LA RASSEGNA')); wp.push(BLANK); wp.push(mkPara("FILIPPO: And now let's go to the trending topics!")); }
     else if(tk==='lancio-trending'){
-      // Count how many trending blocks follow in this episode
-      var trendingCount=secs.filter(function(sx){ return sx.type==='trending'; }).length;
-      var lt=s.script&&s.script['lancio-trending']||{};
-      var launchNum=lt.numero||String(trendingCount);
-      var launchText=lt.testo1||('TRENDING ITALY\nWhat is trending today in Italy');
-      // Build Filippo launch line
-      var lancioLine='FILIPPO: Now it\'s time for the biggest talking points in Italy\u2026 starting at number '+numberToWord(parseInt(launchNum))+' !';
-      wp.push(mkPara(launchText)); wp.push(BLANK);
-      wp.push(mkPara(lancioLine));
+      var ltCount=secs.filter(function(sx){ return sx.type==='trending'; }).length;
+      var ltWord=numberToWord(ltCount);
+      wp.push(mkPara('LANCIO TRENDING')); wp.push(BLANK);
+      wp.push(mkPara('FILIPPO: Well, Professor, now it\'s time for the biggest talking points in Italy'));
+      wp.push(mkPara('ARDE: I\'m looking forward to it.'));
+      wp.push(mkPara('FILIPPO: So let\'s start at number '+ltWord+'!'));
     }
     else if(tk==='trending'){
       tIdx++;
@@ -3162,7 +3197,7 @@ function generaScalettaDocx(iso){
     else if(tk==='saluti'){ wp.push(mkPara('SALUTI CHIUSURA + SIGLA')); }
 
     var _hl=_hlRow; _hlRow=false;
-    rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell([mkPara(timeStr,'',_hl)],1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
+    rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell([mkPara(timeStr,'',_hl)],1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title,s),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
     if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
     if(tk==='trending'&&(tCount-tIdx)>0) rows.push(bumperRow('BUMPER TRENDING N° '+(tCount-tIdx)));
     if(tk==='lancio-trending') rows.push(bumperRow('BUMPER TRENDING N° '+tCount));
@@ -4091,7 +4126,10 @@ function renderPanelBody(sec){
       h+='<div class="rvm-block">'
         +'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;flex-wrap:wrap">'
         +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.8rem" data-secid="'+sec.id+'" onclick="pescaCalendarioTr(this.dataset.secid)">&#x1F4C5; Pesca dal calendario</button>'
+        +'<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.3rem">'
         +'<button class="btn btn-primary" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="generaDialogoTrending(this.dataset.secid)">&#x1F916; Genera dialogo</button>'
+        +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="generaDialogoVuoto(this.dataset.secid)">&#x1F4DD; Dialogo vuoto</button>'
+        +'</div>'
         +'<div id="tr-gen-status" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3)"></div>'
         +'</div>'
         +'<div id="tr-cal-picker" style="display:none;margin-top:0.3rem;margin-bottom:0.6rem;border:1px solid var(--brd);border-radius:7px;overflow:hidden">'
@@ -6216,6 +6254,7 @@ function showOspiteModal(g, isNew){
     +'<div style="display:flex;gap:0.5rem">'
     +'<button class="btn" style="background:var(--bg3)" id="osp-cancel-btn">Annulla</button>'
     +(!isNew?'<button class="btn btn-primary" style="background:var(--acc);color:#fff;border-color:var(--acc)" id="osp-add-puntata-btn">➕ Aggiungi in puntata</button>':'')
+    +(!isNew?'<button class="btn" style="font-size:0.78rem" id="osp-copy-excel-btn" title="Copia riga nel formato Excel">📋 Copia riga Excel</button>':'')
     +'<button class="btn btn-primary" id="osp-save-btn">Salva</button>'
     +'</div></div>'
     +'</div>';
@@ -6279,6 +6318,8 @@ function showOspiteModal(g, isNew){
     save(); document.body.removeChild(overlay); renderOspiti();
   };
   if(!isNew){
+    var copyExcelBtn=overlay.querySelector('#osp-copy-excel-btn');
+    if(copyExcelBtn) copyExcelBtn.onclick=function(){ copiaRigaExcelOspite(g, overlay); };
     overlay.querySelector('#osp-del-btn').onclick=function(){
       if(!confirm('Eliminare questa scheda ospite?')) return;
       S.guests=S.guests.filter(function(x){ return x.id!==g.id; });
@@ -6287,6 +6328,63 @@ function showOspiteModal(g, isNew){
     var addPunBtn=overlay.querySelector('#osp-add-puntata-btn');
     if(addPunBtn) addPunBtn.onclick=function(){ aggiungiOspiteInPuntata(g, overlay); };
   }
+}
+
+function copiaRigaExcelOspite(g, overlay){
+  // Read current values from modal fields
+  var nome=overlay.querySelector('#osp-nome').value||g.nome||'';
+  var sottopancia=overlay.querySelector('#osp-sotto')&&overlay.querySelector('#osp-sotto').value||g.sottopancia||'';
+  var day=overlay.querySelector('#osp-day')&&overlay.querySelector('#osp-day').value||g.day||'';
+  var prodDay=overlay.querySelector('#osp-prodday')&&overlay.querySelector('#osp-prodday').value||g.prodDay||'';
+  var location=g.location||'Studio';
+  var daDove=g.daDove||'';
+  var accompagnatori=g.accompagnatori||'';
+  var richiestaViaggio=g.richiestaViaggio?'Sì':'No';
+  var richiestaTaxi=g.richiestaTaxi?'Sì':'No';
+  var bio=overlay.querySelector('#osp-bio')&&overlay.querySelector('#osp-bio').value||g.bio||'';
+  var telefono=overlay.querySelector('#osp-tel')&&overlay.querySelector('#osp-tel').value||g.telefono||'';
+  var email=overlay.querySelector('#osp-email')&&overlay.querySelector('#osp-email').value||g.email||'';
+  var noteLogistiche=g.noteLogistiche||'';
+  var noteCopione=overlay.querySelector('#osp-note-cop')&&overlay.querySelector('#osp-note-cop').value||g.noteCopione||'';
+
+  // Find episode number from assignment
+  var epSec=S.sections.find(function(s){ return s.assignment&&s.assignment.date===day&&s.type==='ospite'&&((s.script&&s.script.ospiteRef&&s.script.ospiteRef.nome||s.title||'').toLowerCase()===nome.toLowerCase()); });
+  var epNum=epSec&&epSec.assignment&&epSec.assignment.epNum||'';
+
+  // Build tab-separated row matching Excel structure:
+  // #, Num puntata, Date, Contact, Prod Day, Guest, Abituale, Sottopancia, Studio/Remote, Da dove, Accompagnatori, Viaggio, Taxi, Bio, Phone, Email, Note logistiche, Note copione
+  var cols=[
+    '',                          // 1 #
+    epNum,                       // 2 Numero puntata
+    day,                         // 3 Date
+    '',                          // 4 Contact (da compilare)
+    prodDay,                     // 5 Prod Day
+    nome,                        // 6 Guest
+    g.abituale?'Sì':'No',        // 7 Abituale
+    sottopancia.slice(0,50),     // 8 Sottopancia (max 50)
+    location,                    // 9 Studio/Remote
+    daDove,                      // 10 Se remote, da dove
+    accompagnatori,              // 11 Accompagnatori
+    richiestaViaggio,            // 12 Richiesta viaggio
+    richiestaTaxi,               // 13 Richiesta Taxi
+    bio,                         // 14 Bio
+    telefono,                    // 15 Phone
+    email,                       // 16 Email
+    noteLogistiche,              // 17 Note logistiche
+    noteCopione                  // 18 Note copione
+  ];
+
+  var row=cols.join('\t');
+  navigator.clipboard.writeText(row).then(function(){
+    var btn=overlay.querySelector('#osp-copy-excel-btn');
+    if(btn){ var orig=btn.textContent; btn.textContent='✓ Copiato!'; setTimeout(function(){ btn.textContent=orig; },2000); }
+  }).catch(function(){
+    // Fallback
+    var ta=document.createElement('textarea');
+    ta.value=row; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    var btn=overlay.querySelector('#osp-copy-excel-btn');
+    if(btn){ var orig=btn.textContent; btn.textContent='✓ Copiato!'; setTimeout(function(){ btn.textContent=orig; },2000); }
+  });
 }
 
 function aggiungiOspiteInPuntata(g, overlay){
