@@ -1550,7 +1550,7 @@ function _createEpisode(date, epNum){
     var s=mkSection(); s.type=type; s.title=title; s.durata=durata;
     s.assignment={date:date,blocco:blocco,epNum:epNum};
     if(extra) extra(s);
-    S.sections.push(s); created.push(title);
+    S.sections.push(s); created.push(title); markModified(s.id);
   }
 
   mk('header',  'Header',     '0:00', 0);
@@ -1715,12 +1715,12 @@ function vpAddSezione(iso, tipo){
   window._vpPendingRefresh=iso;
 }
 
+function vpGetOrdine(s){ return s.assignment.ordine!==undefined ? s.assignment.ordine : (s.assignment.blocco||0); }
+
 function vpGetSiblings(iso, tipo){
   return S.sections.filter(function(s){
     return s.type===tipo&&s.assignment&&s.assignment.date===iso;
-  }).sort(function(a,b){
-    return ((a.assignment.ordine||a.assignment.blocco||0))-(b.assignment.ordine||b.assignment.blocco||0);
-  });
+  }).sort(function(a,b){ return vpGetOrdine(a)-vpGetOrdine(b); });
 }
 
 function vpMoveUp(secId, iso, tipo){
@@ -1728,9 +1728,12 @@ function vpMoveUp(secId, iso, tipo){
   var idx=siblings.findIndex(function(s){ return s.id===secId; });
   if(idx<=0) return;
   var a=siblings[idx-1], b=siblings[idx];
-  var tmp=(a.assignment.ordine||a.assignment.blocco||0);
-  a.assignment.ordine=(b.assignment.ordine||b.assignment.blocco||0);
+  // Ensure both have explicit ordine values before swapping
+  siblings.forEach(function(s,i){ s.assignment.ordine=i; });
+  var tmp=a.assignment.ordine;
+  a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
+  markModified(a.id); markModified(b.id);
   save(); openVistaPuntata(iso);
 }
 
@@ -1739,9 +1742,12 @@ function vpMoveDown(secId, iso, tipo){
   var idx=siblings.findIndex(function(s){ return s.id===secId; });
   if(idx<0||idx>=siblings.length-1) return;
   var a=siblings[idx], b=siblings[idx+1];
-  var tmp=(a.assignment.ordine||a.assignment.blocco||0);
-  a.assignment.ordine=(b.assignment.ordine||b.assignment.blocco||0);
+  // Ensure both have explicit ordine values before swapping
+  siblings.forEach(function(s,i){ s.assignment.ordine=i; });
+  var tmp=a.assignment.ordine;
+  a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
+  markModified(a.id); markModified(b.id);
   save(); openVistaPuntata(iso);
 }
 
@@ -3032,7 +3038,7 @@ function generaScalettaDocx(iso){
     var tk=getTk(s);
     if(tk==='header') return;
     if(tk==='headlines') rows.push(bumperRow('BUMPER: HEADLINES'));
-    if(tk==='lancio-trending') rows.push(bumperRow('BUMPER: TRENDING ITALY'));
+    if(tk==='lancio-trending'){ rows.push(bumperRow('BUMPER: TRENDING ITALY')); rows.push(bumperRow('BUMPER TRENDING N° '+tCount)); }
     if(tk==='domandone-relaunch') rows.push(bumperRow('BUMPER: DOMANDONE RELAUNCH'));
     if(tk==='hotstuff'){ var si=secs.indexOf(s); var prev=si>0?secs[si-1]:null; if(!prev||prev.type!=='hotstuff') rows.push(bumperRow('BUMPER: HOT STUFF')); }
 
@@ -3161,20 +3167,40 @@ function generaScalettaDocx(iso){
     if(tk==='trending'&&(tCount-tIdx)>0) rows.push(bumperRow('BUMPER TRENDING N° '+(tCount-tIdx)));
   });
 
-  // Build ospiti list for header
-  var ospiti=[]; var contributori=[];
-  secs.forEach(function(s){ if(s.type==='ospite'){ var oR=(s.script||{}).ospiteRef||{}; if(oR.nome) ospiti.push(oR.nome+(oR.sottopancia?' – '+oR.sottopancia:'')+' (STUDIO)'); } if((s.type==='hotstuff'||s.type==='trending')&&s.talent&&s.talent.name&&s.talent.enabled) contributori.push(s.talent.name+' (COLLEGAMENTO)'); });
+  // Build ospiti list for header — see below after rows
+
+  // Build ospiti list for header — separate talent from ospiti
+  var sonoIntervenuti=[]; var hannoPartecipato=[];
+  secs.forEach(function(s){
+    if(s.type==='ospite'){
+      var oR=(s.script||{}).ospiteRef||{};
+      if(oR.nome){
+        // Check if this ospite is in the TALENTS list
+        var isTalent=TALENTS.some(function(t){ return t.toLowerCase()===oR.nome.toLowerCase(); });
+        var label=oR.nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' (STUDIO)';
+        if(isTalent) sonoIntervenuti.push(label);
+        else hannoPartecipato.push(label);
+      }
+    }
+    if((s.type==='hotstuff'||s.type==='trending')&&s.talent&&s.talent.name&&s.talent.enabled){
+      sonoIntervenuti.push(s.talent.name+' (COLLEGAMENTO)');
+    }
+  });
 
   var titleText='SCALETTA PT. '+epNum+' – '+dayStr.toUpperCase()+' – PAPARAZZI';
   var now=new Date();
   var tsStr='Versione '+now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear()+' h.'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  var allGuests=ospiti.concat(contributori);
   var headerParts=[
     new d.Paragraph({children:[new d.TextRun({text:titleText,bold:true,size:28,font:'Arial'})],alignment:d.AlignmentType.CENTER,spacing:{after:60}}),
     new d.Paragraph({children:[new d.TextRun({text:tsStr,bold:true,italics:true,size:24,font:'Arial'})],alignment:d.AlignmentType.CENTER,spacing:{after:100}})
   ];
-  if(allGuests.length){
-    headerParts.push(new d.Paragraph({children:[new d.TextRun({text:'SONO INTERVENUTI: '+allGuests.join(', '),bold:true,size:22,font:'Arial'})],alignment:d.AlignmentType.CENTER,spacing:{after:0}}));
+  if(sonoIntervenuti.length){
+    headerParts.push(new d.Paragraph({children:[new d.TextRun({text:'SONO INTERVENUTI: '+sonoIntervenuti.join(', '),bold:true,size:22,font:'Arial'})],alignment:d.AlignmentType.CENTER,spacing:{after:0}}));
+  }
+  if(hannoPartecipato.length){
+    headerParts.push(new d.Paragraph({children:[new d.TextRun({text:'HANNO PARTECIPATO: '+hannoPartecipato.join(', '),bold:true,size:22,font:'Arial'})],alignment:d.AlignmentType.CENTER,spacing:{after:0}}));
+  }
+  if(sonoIntervenuti.length||hannoPartecipato.length){
     headerParts.push(new d.Paragraph({spacing:{after:100}}));
   }
 
@@ -3548,7 +3574,8 @@ function doExportGiornaliero(iso){
     var hasFoto=sec.foto&&sec.foto.filter(function(f){ return f.status!=='dialogato'; }).length>0;
     var hasRvm=(sec.rvm&&sec.rvm.needed)||(sec.rvms&&sec.rvms.some(function(r){ return r.needed; }));
     var hasProps=sec.props&&sec.props.needed;
-    if(!hasFoto&&!hasRvm&&!hasProps) return;
+    var hasOspite=sec.type==='ospite'&&sec.script&&sec.script.ospiteRef&&sec.script.ospiteRef.nome;
+    if(!hasFoto&&!hasRvm&&!hasProps&&!hasOspite) return;
 
     // Section header
     children.push(new d.Paragraph({
@@ -3556,6 +3583,22 @@ function doExportGiornaliero(iso){
       heading:d.HeadingLevel.HEADING_2,
       spacing:{before:300,after:100}
     }));
+
+    // Ospite sottopancia
+    if(hasOspite){
+      var oRef=sec.script.ospiteRef;
+      children.push(new d.Paragraph({
+        children:[new d.TextRun({text:'SOTTOPANCIA',bold:true,underline:{}})],
+        spacing:{before:100,after:60}
+      }));
+      children.push(new d.Paragraph({
+        children:[
+          new d.TextRun({text:oRef.nome,bold:true}),
+          new d.TextRun({text:oRef.sottopancia?' — '+oRef.sottopancia:''})
+        ],
+        spacing:{before:0,after:60}
+      }));
+    }
 
     // Foto
     if(hasFoto){
