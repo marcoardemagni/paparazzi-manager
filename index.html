@@ -3038,9 +3038,11 @@ function generaScalettaDocx(iso){
     var tk=getTk(s);
     if(tk==='header') return;
     if(tk==='headlines') rows.push(bumperRow('BUMPER: HEADLINES'));
-    if(tk==='lancio-trending'){ rows.push(bumperRow('BUMPER: TRENDING ITALY')); rows.push(bumperRow('BUMPER TRENDING N° '+tCount)); }
+    if(tk==='lancio-trending') rows.push(bumperRow('BUMPER: TRENDING ITALY'));
     if(tk==='domandone-relaunch') rows.push(bumperRow('BUMPER: DOMANDONE RELAUNCH'));
     if(tk==='hotstuff'){ var si=secs.indexOf(s); var prev=si>0?secs[si-1]:null; if(!prev||prev.type!=='hotstuff') rows.push(bumperRow('BUMPER: HOT STUFF')); }
+    // lancio-trending is a pure bumper — don't count it as a numbered block
+    if(tk==='lancio-trending'){ rows.push(bumperRow('BUMPER TRENDING N° '+tCount)); return; }
 
     blockNum++;
     var dur=DEFAULT_DURATION[tk]||120;
@@ -3165,6 +3167,7 @@ function generaScalettaDocx(iso){
     rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell([mkPara(timeStr,'',_hl)],1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
     if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
     if(tk==='trending'&&(tCount-tIdx)>0) rows.push(bumperRow('BUMPER TRENDING N° '+(tCount-tIdx)));
+    if(tk==='lancio-trending') rows.push(bumperRow('BUMPER TRENDING N° '+tCount));
   });
 
   // Build ospiti list for header — see below after rows
@@ -3174,10 +3177,10 @@ function generaScalettaDocx(iso){
   secs.forEach(function(s){
     if(s.type==='ospite'){
       var oR=(s.script||{}).ospiteRef||{};
-      if(oR.nome){
-        // Check if this ospite is in the TALENTS list
-        var isTalent=TALENTS.some(function(t){ return t.toLowerCase()===oR.nome.toLowerCase(); });
-        var label=oR.nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' (STUDIO)';
+      var nome=oR.nome||(s.title&&s.title!=='Ospite'?s.title:'');
+      if(nome){
+        var isTalent=TALENTS.some(function(t){ return t.toLowerCase()===nome.toLowerCase(); });
+        var label=nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' (STUDIO)';
         if(isTalent) sonoIntervenuti.push(label);
         else hannoPartecipato.push(label);
       }
