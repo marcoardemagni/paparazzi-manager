@@ -5984,7 +5984,7 @@ function mkOspite(){
     // F — Regia/Scena
     regia:'Non serve', preshow:'Non serve', noteProps:'',
     // G — Extra
-    extra:'',
+    extra:'', ranking:6,
     // H — Contatti
     telefono:'', email:'', secNome:'', secTelefono:'', secEmail:'',
     updatedAt: Date.now()
@@ -6354,28 +6354,37 @@ function copiaRigaExcelOspite(g, overlay){
 
   // Build tab-separated row matching Excel structure:
   // #, Num puntata, Date, Contact, Prod Day, Guest, Abituale, Sottopancia, Studio/Remote, Da dove, Accompagnatori, Viaggio, Taxi, Bio, Phone, Email, Note logistiche, Note copione
+  // Format date as "mer 16 set 2026"
+  function fmtDateIT(iso){
+    if(!iso) return '';
+    var nd=new Date(iso+'T12:00:00');
+    var DAYS=['dom','lun','mar','mer','gio','ven','sab'];
+    var MONTHS=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    return DAYS[nd.getDay()]+' '+nd.getDate()+' '+MONTHS[nd.getMonth()]+' '+nd.getFullYear();
+  }
+
   // Sanitize: remove all line feeds to keep the row on a single Excel line
   function clean(s){ return (s||'').replace(/[\r\n\t]+/g,' ').trim(); }
 
   var cols=[
-    '',                          // 1 #
-    clean(epNum),                // 2 Numero puntata
-    clean(day),                  // 3 Date
-    '',                          // 4 Contact
-    clean(prodDay),              // 5 Prod Day
-    clean(nome),                 // 6 Guest
-    g.abituale?'Sì':'No',        // 7 Abituale
-    clean(sottopancia).slice(0,50), // 8 Sottopancia (max 50)
-    clean(location),             // 9 Studio/Remote
-    clean(daDove),               // 10 Se remote, da dove
-    clean(accompagnatori),       // 11 Accompagnatori
-    richiestaViaggio,            // 12 Richiesta viaggio
-    richiestaTaxi,               // 13 Richiesta Taxi
-    clean(bio),                  // 14 Bio
-    clean(telefono),             // 15 Phone
-    clean(email),                // 16 Email
-    clean(noteLogistiche),       // 17 Note logistiche
-    clean(noteCopione)           // 18 Note copione
+    '',                              // 1 #
+    clean(epNum),                    // 2 Numero puntata
+    fmtDateIT(day),                  // 3 Date
+    '',                              // 4 Contact
+    fmtDateIT(prodDay),              // 5 Prod Day
+    clean(nome),                     // 6 Guest
+    g.abituale?'Sì':'No',            // 7 Abituale
+    clean(sottopancia).slice(0,50),  // 8 Sottopancia (max 50)
+    clean(location),                 // 9 Studio/Remote
+    clean(daDove),                   // 10 Se remote, da dove
+    clean(accompagnatori),           // 11 Accompagnatori
+    richiestaViaggio,                // 12 Richiesta viaggio
+    richiestaTaxi,                   // 13 Richiesta Taxi
+    clean(bio),                      // 14 Bio
+    telefono?'\''+clean(telefono):'',// 15 Phone (apostrophe prefix)
+    clean(email),                    // 16 Email
+    clean(noteLogistiche),           // 17 Note logistiche
+    clean(noteCopione)               // 18 Note copione
   ];
 
   var row=cols.join('\t');
