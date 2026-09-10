@@ -2675,6 +2675,74 @@ function generaDomandone(secId){
   });
 }
 
+function rivediDialogo(secId){
+  var sec=S.sections.find(function(s){ return s.id===secId; });
+  if(!sec) return;
+  var dialogo=(sec.script&&sec.script.dialogo)||'';
+  if(!dialogo){ alert('Nessun dialogo da rivedere. Genera prima un dialogo.'); return; }
+
+  // Show overlay with instructions textarea
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;width:480px;max-width:95vw">'
+    +'<div style="font-weight:700;font-size:0.95rem;margin-bottom:0.8rem">✏️ Rivedi dialogo</div>'
+    +'<div style="font-size:0.82rem;color:var(--text3);margin-bottom:0.5rem">Descrivi le modifiche da apportare al dialogo:</div>'
+    +'<textarea id="rivedi-note" class="ftextarea" style="min-height:80px;margin-bottom:0.8rem" placeholder="es. &quot;troppo lungo&quot;, &quot;controlla il dato sui milioni&quot;, &quot;tono più leggero&quot;, &quot;aggiungi una battuta di Arde&quot;…" autofocus></textarea>'
+    +'<div id="rivedi-status" style="font-size:0.75rem;color:var(--text3);margin-bottom:0.5rem"></div>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
+    +'<button class="btn btn-primary" id="rivedi-confirm">Rivedi →</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+
+  // Focus textarea
+  setTimeout(function(){ var ta=overlay.querySelector('#rivedi-note'); if(ta) ta.focus(); }, 50);
+
+  // Enter key submits
+  overlay.querySelector('#rivedi-note').addEventListener('keydown', function(e){
+    if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) overlay.querySelector('#rivedi-confirm').click();
+  });
+
+  overlay.querySelector('#rivedi-confirm').onclick=function(){
+    var note=overlay.querySelector('#rivedi-note').value.trim();
+    if(!note){ alert('Inserisci le istruzioni di revisione.'); return; }
+    var st=overlay.querySelector('#rivedi-status');
+    var btn=overlay.querySelector('#rivedi-confirm');
+    if(st) st.textContent='Revisione in corso…';
+    btn.disabled=true;
+
+    var systemPrompt='You are a TV script editor for Paparazzi!, a bilingual Italian-English show on Rai Italia. '
+      +'You will receive an existing dialogue between FILIPPO and ARDE and instructions to revise it. '
+      +'Apply the requested changes while preserving the overall structure, tone and style. '
+      +'Reply ONLY with the revised dialogue in the same format as the input, no explanations.';
+
+    var userPrompt='Here is the existing dialogue:\n\n'+dialogo+'\n\n'
+      +'Please revise it with the following instructions:\n'+note;
+
+    callClaude({
+      model:'claude-sonnet-4-6',
+      max_tokens:1200,
+      system:systemPrompt,
+      messages:[{role:'user',content:userPrompt}]
+    }).then(function(data){
+      var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+      if(!txt){ if(st) st.textContent='Errore nella risposta.'; btn.disabled=false; return; }
+      if(!sec.script) sec.script={};
+      sec.script.dialogo=txt.trim();
+      markModified(sec.id);
+      save();
+      var el=document.getElementById('f-tr-dialogo');
+      if(el) el.value=txt.trim();
+      overlay.remove();
+      var stMain=document.getElementById('tr-gen-status');
+      if(stMain) stMain.textContent='✓ Dialogo rivisto';
+    }).catch(function(){
+      if(st) st.textContent='Errore di rete. Riprova.';
+      btn.disabled=false;
+    });
+  };
+}
+
 function generaDialogoVuoto(secId){
   var sec=S.sections.find(function(s){ return s.id===secId; });
   if(!sec) return;
@@ -3052,9 +3120,18 @@ function generaScalettaDocx(iso){
       } else if(!hasRvm){
         lines.push('FOTO/VIDEO');
       }
+      // Add posProf note
+      if(sec.posProf==='lavagna') lines.push('\nARDE ALLA LAVAGNA');
+      else if(sec.posProf==='lavagna-italia') lines.push('\nARDE ALLA LAVAGNA ITALIA');
+      else if(sec.posProf==='altro') lines.push('\nARDE IN POSIZIONE');
       return lines.join('\n');
     }
-    return map[tk]||b;
+    // Add posProf note for other types too
+    var base=map[tk]||b;
+    if(sec&&sec.posProf==='lavagna') base+='\n\nARDE ALLA LAVAGNA';
+    else if(sec&&sec.posProf==='lavagna-italia') base+='\n\nARDE ALLA LAVAGNA ITALIA';
+    else if(sec&&sec.posProf==='altro') base+='\n\nARDE IN POSIZIONE';
+    return base;
   }
 
   var COL=[400,900,5200,2400,1300];
@@ -3336,13 +3413,16 @@ function renderEpisodeView(){
       var s=daySecs[pos];
       var inner='';
       if(s){
-        var dots='';
-        if(s.script&&s.script.status&&s.script.status!=='standby') dots+='<div class="ep-dot" style="background:var(--s-'+s.script.status+')"></div>';
-        if(s.rvm&&s.rvm.needed) dots+='<div class="ep-dot" style="background:var(--s-'+(s.rvm.status||'richiesto')+')"></div>';
-        if(s.foto) s.foto.forEach(function(f){ dots+='<div class="ep-dot" style="background:var(--s-'+(f.status||'standby')+')"></div>'; });
+        var pills='';
+        var pStyle=function(st){ return 'display:inline-flex;align-items:center;font-family:var(--mono);font-size:0.52rem;font-weight:700;padding:1px 4px;border-radius:3px;color:var(--s-'+st+');border:1px solid var(--s-'+st+');margin-right:2px;margin-top:2px;'; };
+        if(s.script&&s.script.status&&s.script.status!=='standby') pills+='<span style="'+pStyle(s.script.status)+'">SCR</span>';
+        if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
+        if(s.rvms) s.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){ var rst=r.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM'+(i+1)+'</span>'; });
+        if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills+='<span style="'+pStyle(fst)+'">F'+(i+1)+'</span>'; });
+        if(s.props&&s.props.needed){ var pst=s.props.status||'richiesto'; pills+='<span style="'+pStyle(pst)+'">PROPS</span>'; }
         inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[s.type]||s.type)+'" style="border-left-color:'+typeBorderColor(s.type)+';">'
           +'<div class="ep-slot-title" style="color:'+typeBorderColor(s.type)+'">'+(s.title||'&mdash;')+'</div>'
-          +'<div class="ep-slot-dots">'+dots+'</div>'
+          +(pills?'<div style="display:flex;flex-wrap:wrap;margin-top:2px">'+pills+'</div>':'')
           +'</div>';
       } else {
         inner='<div class="ep-empty">&mdash;</div>';
@@ -4129,6 +4209,7 @@ function renderPanelBody(sec){
         +'<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.3rem">'
         +'<button class="btn btn-primary" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="generaDialogoTrending(this.dataset.secid)">&#x1F916; Genera dialogo</button>'
         +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="generaDialogoVuoto(this.dataset.secid)">&#x1F4DD; Dialogo vuoto</button>'
+        +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="rivediDialogo(this.dataset.secid)">&#x270F;&#xFE0F; Rivedi dialogo</button>'
         +'</div>'
         +'<div id="tr-gen-status" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3)"></div>'
         +'</div>'
