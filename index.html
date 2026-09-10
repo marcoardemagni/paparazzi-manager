@@ -2824,7 +2824,10 @@ function generaPoem(secId){
 function rivediDialogo(secId){
   var sec=S.sections.find(function(s){ return s.id===secId; });
   if(!sec) return;
-  var dialogo=(sec.script&&sec.script.dialogo)||'';
+  var dialogo=(sec.script&&sec.script.dialogo)||
+              (sec.script&&sec.script.bandierina&&sec.script.bandierina.dialogo)||
+              (document.getElementById('f-bf-dialogo')&&document.getElementById('f-bf-dialogo').value)||
+              (document.getElementById('f-poem-script')&&document.getElementById('f-poem-script').value)||'';
   if(!dialogo){ alert('Nessun dialogo da rivedere. Genera prima un dialogo.'); return; }
 
   // Show overlay with instructions textarea
@@ -2874,10 +2877,26 @@ function rivediDialogo(secId){
       var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
       if(!txt){ if(st) st.textContent='Errore nella risposta.'; btn.disabled=false; return; }
       if(!sec.script) sec.script={};
-      sec.script.dialogo=txt.trim();
+      if(!sec.script) sec.script={};
+      // Save to the right place depending on section type
+      if(sec.type==='bandierina'){
+        if(!sec.script.bandierina) sec.script.bandierina={};
+        sec.script.bandierina.dialogo=txt.trim();
+        var bfEl=document.getElementById('f-bf-dialogo');
+        if(bfEl){ bfEl.value=txt.trim(); document.getElementById('bf-dialogo-block').style.display='block'; }
+      } else if(sec.type==='poem'){
+        if(!sec.script.poem) sec.script.poem={};
+        sec.script.poem.testo=txt.trim();
+        var poemEl=document.getElementById('f-poem-script');
+        if(poemEl) poemEl.value=txt.trim();
+      } else {
+        sec.script.dialogo=txt.trim();
+        var el=document.getElementById('f-tr-dialogo');
+        if(el) el.value=txt.trim();
+      }
       // Also update poem textarea if present
       var poemEl=document.getElementById('f-poem-script');
-      if(poemEl) poemEl.value=txt.trim();
+      if(poemEl&&sec.type==='poem') poemEl.value=txt.trim();
       markModified(sec.id);
       save();
       var el=document.getElementById('f-tr-dialogo');
