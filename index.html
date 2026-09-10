@@ -3469,7 +3469,7 @@ function generaScalettaDocx(iso){
       } else { wp.push(mkPara('XXXX – Answer')); }
     }
     else if(tk==='hotstuff'||tk==='ospite'){
-      var note=s.note||''; if(note){ wp.push(mkPara('['+note+']')); wp.push(BLANK); }
+      // Note generali escluse dalla scaletta (materiale di lavoro interno)
       var oRef=(s.script||{}).ospiteRef||{}; if(oRef.nome){ wp.push(mkPara(oRef.nome+(oRef.sottopancia?' – '+oRef.sottopancia:''))); wp.push(BLANK); }
       var hdialRaw=(s.script||{}).intervista||(s.script||{}).dialogo||'';
       var hdial=hdialRaw.split('\n\n').map(function(para){
