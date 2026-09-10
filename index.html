@@ -3530,7 +3530,7 @@ function generaScalettaDocx(iso){
   }
 
   var table=new d.Table({width:{size:COL.reduce(function(a,b){return a+b;},0),type:d.WidthType.DXA},columnWidths:COL,rows:rows});
-  var doc=new d.Document({sections:[{properties:{page:{margin:{top:720,bottom:720,left:720,right:720}}},children:headerParts.concat([table])}]});
+  var doc=new d.Document({sections:[{properties:{page:{margin:{top:500,bottom:500,left:500,right:500}}},children:headerParts.concat([table])}]});
 
   d.Packer.toBlob(doc).then(function(blob){
     var url=URL.createObjectURL(blob);
