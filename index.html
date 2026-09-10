@@ -528,7 +528,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div class="hdr-right">
     <span class="hdr-stat" id="hdrStat"></span>
     <button class="sync-ind" id="syncInd" onclick="openSyncModal()">☁ Sync</button>
-    <button class="hbtn" onclick="cloudLoad(true)" title="Ricarica dati dal cloud">↻ Aggiorna</button>
+    <button class="hbtn" id="btn-aggiorna" onclick="aggiornaSicuro()" title="Attende il polling per sincronizzare senza rischi">↻ Aggiorna</button>
     <button class="hbtn" id="btn-sandbox" onclick="toggleSandbox()" title="Attiva/disattiva modalità sandbox" style="border-color:var(--brd)">🧪 Sandbox</button>
     <button class="hbtn" onclick="exportData()">↓ Export</button>
     <label class="hbtn" style="cursor:pointer">↑ Import<input type="file" id="importFile" accept=".json" style="display:none"></label>
@@ -1041,9 +1041,86 @@ function loadScreenshot(input, idx){
   reader.readAsDataURL(file);
 }
 
+function mostraConflictsDialog(conflictItems, docRef, mergedData, ts){
+  var db=getFirestore(); if(!db) return;
+  // Process one conflict at a time
+  var item=conflictItems[0];
+  var remaining=conflictItems.slice(1);
+  var sec=item.local;
+  var remote=item.remote;
+
+  // Build conflict description
+  var diffs=[];
+  ['rvms','foto','coperture'].forEach(function(subKey){
+    var localLen=(sec[subKey]||[]).length;
+    var remoteLen=(remote[subKey]||[]).length;
+    if(remoteLen>localLen){
+      var label=subKey==='rvms'?'RVM':subKey==='foto'?'Foto':'Coperture';
+      diffs.push(label+': remoto ha '+remoteLen+', tua versione ha '+localLen);
+    }
+  });
+
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;max-width:420px;width:100%">'
+    +'<div style="font-size:1.1rem;font-weight:700;margin-bottom:0.5rem">⚠️ Conflitto rilevato</div>'
+    +'<div style="font-size:0.85rem;color:var(--text2);margin-bottom:0.8rem">'
+    +'La sezione <b>'+esc(sec.title||sec.type)+'</b> è stata modificata da un altro utente nel frattempo.'
+    +'</div>'
+    +'<div style="font-size:0.78rem;color:var(--text3);background:var(--bg3);border-radius:6px;padding:0.5rem 0.7rem;margin-bottom:1rem">'
+    +diffs.join('<br>')
+    +'</div>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" id="conf-remote" style="background:#1a3a2a;color:#4ade80;border-color:#4ade80">↓ Usa versione remota</button>'
+    +'<button class="btn btn-primary" id="conf-local">↑ Usa la mia versione</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+
+  function resolve(useRemote){
+    overlay.remove();
+    // Update the merged data with chosen version
+    if(useRemote){
+      // Find and replace with remote version in merged sections
+      var arr=mergedData[item.key]||[];
+      var idx=arr.findIndex(function(x){ return x.id===sec.id; });
+      if(idx>=0) arr[idx]=remote;
+      // Also update local S
+      var localIdx=S.sections.findIndex(function(x){ return x.id===sec.id; });
+      if(localIdx>=0) S.sections[localIdx]=remote;
+      save();
+    }
+    // Process remaining conflicts
+    if(remaining.length){
+      mostraConflictsDialog(remaining, docRef, mergedData, ts);
+    }
+  }
+
+  overlay.querySelector('#conf-remote').onclick=function(){ resolve(true); };
+  overlay.querySelector('#conf-local').onclick=function(){ resolve(false); };
+}
+
+var _saveFrozen=false;
+
+function aggiornaSicuro(){
+  if(_saveFrozen) return;
+  _saveFrozen=true;
+  var btn=document.getElementById('btn-aggiorna');
+  if(btn){ btn.textContent='⏳ Sincronizzando…'; btn.disabled=true; }
+  setSyncInd('busy','attendo…');
+  // Force a cloudLoad after 2s (let any in-flight saves complete first)
+  setTimeout(function(){
+    cloudLoad(true, function(){
+      setTimeout(function(){
+        _saveFrozen=false;
+        if(btn){ btn.textContent='↻ Aggiorna'; btn.disabled=false; }
+      }, 0);
+    });
+  }, 2000);
+}
+
 function cloudSaveDebounced(){
   if(cloudSaveTimer) clearTimeout(cloudSaveTimer);
-  cloudSaveTimer = setTimeout(cloudSave, 1400);
+  if(!_saveFrozen) cloudSaveTimer = setTimeout(cloudSave, 1400);
 }
 
 function cloudSave(){
@@ -1087,14 +1164,30 @@ function cloudSave(){
           remoteArr.forEach(function(item){ if(item&&item.id) remoteMap[item.id]=item; });
 
           // Local wins ONLY if this item was explicitly modified in this session
+          var conflictItems=[];
           localArr.forEach(function(item){
             if(!item||!item.id) return;
             if(_locallyModified.has(item.id)){
-              remoteMap[item.id]=item; // we touched it — our version wins
+              var remote=remoteMap[item.id];
+              if(remote){
+                // Check if remote has more sub-array elements — potential conflict
+                var hasConflict=false;
+                ['rvms','foto','coperture'].forEach(function(subKey){
+                  var localSub=item[subKey]||[];
+                  var remoteSub=remote[subKey]||[];
+                  if(remoteSub.length>localSub.length) hasConflict=true;
+                });
+                if(hasConflict){
+                  conflictItems.push({local:item, remote:remote, key:key});
+                }
+                remoteMap[item.id]=item; // local wins for now — may be overridden by conflict resolution
+              } else {
+                remoteMap[item.id]=item;
+              }
             } else if(!remoteMap[item.id]){
-              remoteMap[item.id]=item; // new item not yet on Firestore
+              remoteMap[item.id]=item;
             }
-            // else: remote wins — touched by someone else
+            // else: remote wins
           });
 
           // Remove deleted items
@@ -1102,6 +1195,13 @@ function cloudSave(){
 
           merged[key] = Object.values(remoteMap);
           merged.deletedIds = Array.from(new Set((existing.deletedIds||[]).concat(S.deletedIds||[])));
+
+          // Handle conflicts asynchronously after transaction
+          if(conflictItems.length){
+            setTimeout(function(){
+              mostraConflictsDialog(conflictItems, docRef, merged, ts);
+            }, 100);
+          }
         } else {
           merged[key] = localArr;
         }
@@ -1670,6 +1770,7 @@ function openVistaPuntata(iso){
     if(s.rvm&&s.rvm.needed){ var rst2=s.rvm.status||'richiesto'; pills2+='<span style="'+pStyle2(rst2)+'">RVM</span>'; }
     if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills2+='<span style="'+pStyle2(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
     if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills2+='<span style="'+pStyle2(fst)+'">F'+(i+1)+'</span>'; });
+    if(s.coperture&&s.coperture.length) s.coperture.forEach(function(c,i){ var cst=c.status||'richiesto'; if(cst!=='standby') pills2+='<span style="'+pStyle2(cst)+'">COP'+(s.coperture.length>1?i+1:'')+'</span>'; });
     if(s.props&&s.props.needed) pills2+='<span style="'+pStyle2(s.props.status||'richiesto')+'">PROPS</span>';
     var meta2=pills2+(s.responsabile?'<span style="font-family:var(--mono);font-size:0.65rem;color:#fff;font-weight:700;margin-left:4px">'+esc(s.responsabile.toUpperCase())+'</span>':'');
     var isConflict=t==='trending'&&tCount>4;
@@ -3429,6 +3530,7 @@ function renderEpisodeView(){
         if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
         if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills+='<span style="'+pStyle(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
         if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills+='<span style="'+pStyle(fst)+'">F'+(i+1)+'</span>'; });
+        if(s.coperture&&s.coperture.length) s.coperture.forEach(function(c,i){ var cst=c.status||'richiesto'; if(cst!=='standby') pills+='<span style="'+pStyle(cst)+'">COP'+(s.coperture.length>1?i+1:'')+'</span>'; });
         if(s.props&&s.props.needed){ var pst=s.props.status||'richiesto'; pills+='<span style="'+pStyle(pst)+'">PROPS</span>'; }
         inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[s.type]||s.type)+'" style="border-left-color:'+typeBorderColor(s.type)+';">'
           +'<div class="ep-slot-title" style="color:'+typeBorderColor(s.type)+'">'+(s.title||'&mdash;')+'</div>'
@@ -4390,9 +4492,22 @@ function renderPanelBody(sec){
 
   // COPERTURE (hidden for headlines)
   if(sec.type!=='headlines'){
-  h+=sdiv('Coperture / Video senza audio');
-  h+='<div id="coperture-list" class="multi-list">'+renderMediaList('coperture',sec.coperture)+'</div>'
-    +'<button class="add-btn" onclick="addMedia(\'coperture\')">+ Aggiungi copertura / video</button>';
+    h+=sdiv('Coperture / Video senza audio');
+    h+='<div id="coperture-list">';
+    (sec.coperture||[]).forEach(function(c,i){
+      h+='<div class="rvm-block" id="cop-block-'+i+'" style="margin-bottom:0.6rem;padding:0.6rem;background:var(--surf2);border-radius:6px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">'
+        +'<div class="flbl" style="margin:0">Copertura '+(i+1)+'</div>'
+        +'<button class="mitem-del" onclick="removeCopertura('+i+')" title="Rimuovi">×</button>'
+        +'</div>'
+        +'<div class="flbl" style="margin-bottom:4px">Stato</div>'
+        +pipeBar('f-cop-st-'+i, c.status||'richiesto', 'copertura', i, ['richiesto','girato','montato','descritto'], {richiesto:'Richiesto',girato:'Girato',montato:'Montato',descritto:'Descritto'})
+        +'<div class="flbl" style="margin-top:0.5rem">Descrizione contenuto</div>'
+        +'<textarea class="ftextarea" id="f-cop-notes-'+i+'" placeholder="Descrivi la copertura\u2026" style="min-height:38px">'+esc(c.notes||'')+'</textarea>'
+        +'</div>';
+    });
+    h+='</div>'
+      +'<button class="add-btn" onclick="addCopertura()">+ Aggiungi copertura</button>';
   }
 
   // PROPS
@@ -4590,7 +4705,7 @@ function renderRvmBlock(r, i, total){
   var h='<div class="rvm-block" id="rvm-block-'+i+'" style="margin-bottom:0.6rem;padding:0.6rem;background:var(--surf2);border-radius:6px">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">'
     +'<div class="flbl" style="margin:0">RVM '+(i+1)+'</div>'
-    +(total>1?'<button class="mitem-del" onclick="removeRvm('+i+')">×</button>':'')
+    +'<button class="mitem-del" onclick="removeRvm('+i+')" title="Rimuovi questo RVM">×</button>'
     +'</div>'
     +'<div class="flbl" style="margin-bottom:4px">Stato</div>'
     +pipeBar('f-rvm-st-'+i, r.status||'richiesto', 'rvm', i)
@@ -4605,6 +4720,28 @@ function renderRvmBlock(r, i, total){
     +'</div>';
   return h;
 }
+function addCopertura(){
+  var sec=S.sections.find(function(s){ return s.id===editingId; }); if(!sec) return;
+  collectCoperture(sec);
+  if(!sec.coperture) sec.coperture=[];
+  if(sec.coperture.length>=5) return;
+  sec.coperture.push({status:'richiesto',notes:''});
+  markModified(sec.id); save(); renderPanelBody(sec);
+}
+function removeCopertura(i){
+  var sec=S.sections.find(function(s){ return s.id===editingId; }); if(!sec) return;
+  collectCoperture(sec);
+  sec.coperture.splice(i,1);
+  markModified(sec.id); save(); renderPanelBody(sec);
+}
+function collectCoperture(sec){
+  if(!sec.coperture||!sec.coperture.length) return;
+  for(var i=0;i<sec.coperture.length;i++){
+    var el=document.getElementById('f-cop-notes-'+i);
+    if(el) sec.coperture[i].notes=el.value;
+  }
+}
+
 function addRvm(){
   var sec=S.sections.find(function(s){ return s.id===editingId; }); if(!sec) return;
   collectRvms(sec);
@@ -4713,6 +4850,7 @@ function setPipe(id, val, mediaType, mediaIdx){
   var sec=S.sections.find(function(s){ return s.id===editingId; }); if(!sec) return;
   if(mediaType==='foto') sec.foto[mediaIdx].status=val;
   else if(mediaType==='coperture') sec.coperture[mediaIdx].status=val;
+  else if(mediaType==='copertura'){ if(sec.coperture&&sec.coperture[mediaIdx]) sec.coperture[mediaIdx].status=val; }
   else if(mediaType==='rvm'){ if(sec.rvms&&sec.rvms[mediaIdx]) sec.rvms[mediaIdx].status=val; }
   else if(id.startsWith('f-script')) sec.script.status=val;
   else if(id.startsWith('f-rvm')) sec.rvm.status=val;
@@ -4950,6 +5088,7 @@ function collectForm(){
       }
     }
     collectRvms(sec);
+    collectCoperture(sec);
     var radios=document.querySelectorAll('input[name="f-pos-prof"]');
     for(var ri=0;ri<radios.length;ri++){ if(radios[ri].checked){ sec.posProf=radios[ri].value; break; } }
     var altroEl=document.getElementById('f-pos-altro'); if(altroEl) sec.posProfAltro=altroEl.value;
@@ -7001,8 +7140,9 @@ function renderDayView(){
 
     // Coperture
     (sec.coperture||[]).forEach((c,i)=>{
-      const lbl=c.desc?c.desc.slice(0,18)+(c.desc.length>18?'…':''):`Cop. ${i+1}`;
-      pills.push({code:`C${i+1}`, label:lbl, st:c.status||'standby'});
+      const lbl=c.notes?c.notes.slice(0,18)+(c.notes.length>18?'…':`Cop. ${i+1}`):`Cop. ${i+1}`;
+      const cst=c.status||'richiesto';
+      if(cst!=='standby') pills.push({code:`COP${(sec.coperture||[]).length>1?i+1:''}`, label:lbl, st:cst});
     });
 
     // Props
