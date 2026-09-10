@@ -3207,11 +3207,13 @@ function generaScalettaDocx(iso){
       var lines=[];
       // RVM
       if(sec.rvm&&sec.rvm.needed&&sec.rvm.status!=='non-serve'){
-        lines.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':''));
+        var rvmLabel='RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')+(sec.rvm.notes?' '+sec.rvm.notes:'');
+        lines.push(rvmLabel);
       }
       if(sec.rvms&&sec.rvms.length){
         sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'&&r.status!=='standby'; }).forEach(function(r,i){
-          lines.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':''));
+          var rvmLabel='RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':'')+(r.notes?' '+r.notes:'');
+          lines.push(rvmLabel);
         });
       }
       // Coperture
@@ -3238,7 +3240,17 @@ function generaScalettaDocx(iso){
 
     if(tk==='sigla') return 'SIGLA';
     if(tk==='welcome') return b+'\n\nFIL E ARDE IN PIEDI'+(sec?posProfNote(sec):'');
-    if(tk==='bandierina') return b+'\n\n\nFOTO '+t+'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA'+(sec?posProfNote(sec):'');
+    if(tk==='bandierina'){
+      var lines=[b,''];
+      if(sec&&sec.foto&&sec.foto.length){
+        sec.foto.forEach(function(f,i){ lines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
+      } else {
+        lines.push('FOTO '+t);
+      }
+      lines.push('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA');
+      if(sec) lines.push(posProfNote(sec));
+      return lines.join('\n');
+    }
     if(tk==='domandone') return b+'\n\n\nGRAFICA DOMANDONE'+(sec?posProfNote(sec):'');
     if(tk==='domandone-relaunch') return b+'\n\n\nGRAFICA THE DOMANDONE'+(sec?posProfNote(sec):'');
     if(tk==='domandone-answer') return b+'\n\n\nGRAFICA DOMANDONE\n\n\n\n\n\n\n\n\n\nGRAFICA RISPOSTA'+(sec?posProfNote(sec):'');
