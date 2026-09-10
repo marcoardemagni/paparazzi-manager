@@ -3300,14 +3300,15 @@ function generaScalettaDocx(iso){
     if(tk==='sigla') return 'SIGLA';
     if(tk==='welcome') return b+'\n\nFIL E ARDE IN PIEDI'+(sec?posProfNote(sec):'');
     if(tk==='bandierina'){
+      var pp=posProfNote(sec);
       var lines=[b,''];
+      if(pp){ lines.push(pp); lines.push(''); }
       if(sec&&sec.foto&&sec.foto.length){
-        sec.foto.forEach(function(f,i){ lines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
+        lines.push(sec.foto.map(function(f,i){ return 'FOTO '+(i+1)+(f.desc?' – '+f.desc:''); }).join('\n\n'));
       } else {
         lines.push('FOTO '+t);
       }
       lines.push('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA');
-      if(sec) lines.push(posProfNote(sec));
       return lines.join('\n');
     }
     if(tk==='domandone') return b+'\n\n\nGRAFICA DOMANDONE'+(sec?posProfNote(sec):'');
@@ -3320,19 +3321,24 @@ function generaScalettaDocx(iso){
     if(tk==='saluti') return ''+(sec?posProfNote(sec):'');
 
     if(tk==='ospite'&&sec){
+      var pp=posProfNote(sec);
       var media=buildMedia(sec);
-      var base=b+(media?'\n\n'+media:'\n\nFOTO/VIDEO');
-      base+=posProfNote(sec);
-      return base;
+      var parts=[b];
+      if(pp) parts.push('', pp, '');
+      if(media) parts.push(media);
+      else if(!pp) parts.push('FOTO/VIDEO');
+      return parts.join('\n');
     }
 
     // Trending and hotstuff
     if((tk==='trending'||tk==='hotstuff')&&sec){
-      var media=buildMedia(sec);
-      var base=b+(media?'\n\n'+media:'\n\nFOTO/VIDEO');
       var pp=posProfNote(sec);
-      if(pp) base+=pp;
-      return base;
+      var media=buildMedia(sec);
+      var parts=[b];
+      if(pp) parts.push('', pp, '');
+      if(media) parts.push(media);
+      else if(!pp) parts.push('FOTO/VIDEO');
+      return parts.join('\n');
     }
 
     return b+(sec?posProfNote(sec):'');
@@ -3484,7 +3490,7 @@ function generaScalettaDocx(iso){
     var timeCell=[
       mkPara(timeStr,'',_hl),
       mkPara(''),
-      new d.Paragraph({children:[new d.TextRun({text:durStr,bold:true,font:'Arial',size:18})],spacing:{after:0}})
+      ...(blockNum>1?[new d.Paragraph({children:[new d.TextRun({text:durStr,bold:true,font:'Arial',size:18})],spacing:{after:0}})]:[])
     ];
     rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell(timeCell,1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title,s),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
     if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
