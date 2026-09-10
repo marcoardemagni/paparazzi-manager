@@ -1668,7 +1668,7 @@ function openVistaPuntata(iso){
     var pills2='';
     if(s.script&&s.script.status&&s.script.status!=='standby') pills2+='<span style="'+pStyle2(s.script.status)+'">SCR</span>';
     if(s.rvm&&s.rvm.needed){ var rst2=s.rvm.status||'richiesto'; pills2+='<span style="'+pStyle2(rst2)+'">RVM</span>'; }
-    if(s.rvms) s.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){ pills2+='<span style="'+pStyle2(r.status||'richiesto')+'">RVM'+(i+1)+'</span>'; });
+    if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills2+='<span style="'+pStyle2(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
     if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills2+='<span style="'+pStyle2(fst)+'">F'+(i+1)+'</span>'; });
     if(s.props&&s.props.needed) pills2+='<span style="'+pStyle2(s.props.status||'richiesto')+'">PROPS</span>';
     var meta2=pills2+(s.responsabile?'<span style="font-family:var(--mono);font-size:0.65rem;color:#fff;font-weight:700;margin-left:4px">'+esc(s.responsabile.toUpperCase())+'</span>':'');
@@ -3422,14 +3422,17 @@ function renderEpisodeView(){
       if(s){
         var pills='';
         var pStyle=function(st){ return 'display:inline-flex;align-items:center;font-family:var(--mono);font-size:0.52rem;font-weight:700;padding:1px 4px;border-radius:3px;color:var(--s-'+st+');border:1px solid var(--s-'+st+');margin-right:2px;margin-top:2px;'; };
-        var scrSt=s.script&&(s.script.status||s.script.dialogo?'dialogato':'');
-        if(scrSt&&scrSt!=='standby') pills+='<span style="'+pStyle(scrSt)+'">SCR</span>';
+        // SCR — only if explicitly set beyond standby
+        var scrSt=s.script&&s.script.status||'standby';
+        if(scrSt!=='standby') pills+='<span style="'+pStyle(scrSt)+'">SCR</span>';
+        // RVM — check both s.rvm (single, needed flag) and s.rvms (array, always needed if present and status != non-serve)
         if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
-        if(s.rvms) s.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){ var rst=r.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM'+(i+1)+'</span>'; });
+        if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills+='<span style="'+pStyle(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
         if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills+='<span style="'+pStyle(fst)+'">F'+(i+1)+'</span>'; });
         if(s.props&&s.props.needed){ var pst=s.props.status||'richiesto'; pills+='<span style="'+pStyle(pst)+'">PROPS</span>'; }
         inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[s.type]||s.type)+'" style="border-left-color:'+typeBorderColor(s.type)+';">'
           +'<div class="ep-slot-title" style="color:'+typeBorderColor(s.type)+'">'+(s.title||'&mdash;')+'</div>'
+          +(s.responsabile?'<div style="font-family:var(--mono);font-size:0.52rem;color:#fff;font-weight:700;margin-top:1px">'+esc(s.responsabile.toUpperCase())+'</div>':'')
           +(pills?'<div style="display:flex;flex-wrap:wrap;margin-top:2px">'+pills+'</div>':'')
           +'</div>';
       } else {
@@ -6980,28 +6983,31 @@ function renderDayView(){
     const pills=[];
 
     // Script
-    pills.push({code:'S', label:'Script', st:sec.script.status||'standby'});
+    pills.push({code:'S', label:'Script', st:(sec.script&&sec.script.status)||'standby'});
 
-    // RVM
-    if(sec.rvm.needed){
+    // RVM — check both s.rvm (single, needed flag) and s.rvms (array, always needed if status != non-serve)
+    if(sec.rvm&&sec.rvm.needed){
       const dur=sec.rvm.duration?` ${sec.rvm.duration}`:'';
-      pills.push({code:'R', label:'RVM'+dur, st:sec.rvm.status||'standby'});
+      pills.push({code:'R', label:'RVM'+dur, st:sec.rvm.status||'richiesto'});
     }
+    if(sec.rvms&&sec.rvms.length) sec.rvms.filter(r=>r.status&&r.status!=='non-serve'&&r.status!=='nonserve').forEach((r,i)=>{
+      pills.push({code:`R${sec.rvms.length>1?i+1:''}`, label:'RVM'+(r.duration?' '+r.duration:''), st:r.status||'richiesto'});
+    });
 
     // Foto
-    sec.foto.forEach((f,i)=>{
+    (sec.foto||[]).forEach((f,i)=>{
       const lbl=f.desc?f.desc.slice(0,18)+(f.desc.length>18?'…':''):`Foto ${i+1}`;
       pills.push({code:`F${i+1}`, label:lbl, st:f.status||'standby'});
     });
 
     // Coperture
-    sec.coperture.forEach((c,i)=>{
+    (sec.coperture||[]).forEach((c,i)=>{
       const lbl=c.desc?c.desc.slice(0,18)+(c.desc.length>18?'…':''):`Cop. ${i+1}`;
       pills.push({code:`C${i+1}`, label:lbl, st:c.status||'standby'});
     });
 
     // Props
-    if(sec.props.needed) pills.push({code:'P', label:'Props', st:'standby'});
+    if(sec.props&&sec.props.needed) pills.push({code:'P', label:'Props', st:sec.props.status||'richiesto'});
 
     const pillsHtml=pills.map(p=>`
       <div class="elem-pill p-${p.st}" title="${p.label}">
@@ -7019,7 +7025,7 @@ function renderDayView(){
       <div class="sc-row-body">
         <div class="sc-row-top">
           <div class="sc-row-title" style="color:${typeBorderColor(sec.type)}">${sec.title||'<em style="opacity:0.4">Senza titolo</em>'}</div>
-          ${sec.responsabile?`<div class="sc-row-resp">👤 ${esc(sec.responsabile)}</div>`:''}
+          ${sec.responsabile?`<div style="font-family:var(--mono);font-size:0.65rem;color:#fff;font-weight:700;margin-left:4px">${esc(sec.responsabile.toUpperCase())}</div>`:''}
         </div>
         <div class="sc-row-elems">${pillsHtml}</div>
         ${fonte}
