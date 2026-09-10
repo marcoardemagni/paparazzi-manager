@@ -1721,9 +1721,9 @@ function sortSezioniPuntata(secs){
   return secs.slice().sort(function(a,b){
     var oa=getTipoOrdine(a), ob=getTipoOrdine(b);
     if(oa!==ob) return oa-ob;
-    // Same type: sort by ordine field, then by blocco for backward compat
-    var ra=(a.assignment&&a.assignment.ordine)||( a.assignment&&a.assignment.blocco)||0;
-    var rb=(b.assignment&&b.assignment.ordine)||(b.assignment&&b.assignment.blocco)||0;
+    // Same type: sort by ordine field (explicit), then blocco for backward compat
+    var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:(a.assignment&&a.assignment.blocco||0);
+    var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:(b.assignment&&b.assignment.blocco||0);
     return ra-rb;
   });
 }
@@ -1767,7 +1767,7 @@ function openVistaPuntata(iso){
     var pStyle2=function(st){ return 'display:inline-flex;align-items:center;font-family:var(--mono);font-size:0.52rem;font-weight:700;padding:1px 4px;border-radius:3px;color:var(--s-'+st+');border:1px solid var(--s-'+st+');margin-right:2px;'; };
     var pills2='';
     if(s.script&&s.script.status&&s.script.status!=='standby') pills2+='<span style="'+pStyle2(s.script.status)+'">SCR</span>';
-    if(s.rvm&&s.rvm.needed){ var rst2=s.rvm.status||'richiesto'; pills2+='<span style="'+pStyle2(rst2)+'">RVM</span>'; }
+    if(s.rvm&&s.rvm.needed){ var rst2=s.rvm.status||'richiesto'; if(rst2!=='standby'&&rst2!=='non-serve') pills2+='<span style="'+pStyle2(rst2)+'">RVM</span>'; }
     if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills2+='<span style="'+pStyle2(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
     if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills2+='<span style="'+pStyle2(fst)+'">F'+(i+1)+'</span>'; });
     if(s.coperture&&s.coperture.length) s.coperture.forEach(function(c,i){ var cst=c.status||'richiesto'; if(cst!=='standby') pills2+='<span style="'+pStyle2(cst)+'">COP'+(s.coperture.length>1?i+1:'')+'</span>'; });
@@ -3201,45 +3201,75 @@ function generaScalettaDocx(iso){
   function getGrafica(tk,title,sec){
     var b='WALL TORINO';
     var t=title||'';
-    var map={
-      'sigla':'SIGLA',
-      'welcome':'WALL TORINO\n\nFIL E ARDE IN PIEDI',
-      'bandierina':b+'\n\n\nFOTO '+t+'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA',
-      'domandone':b+'\n\n\nGRAFICA DOMANDONE\n\nE-MAIL PAPARAZZI@RAI.IT',
-      'domandone-relaunch':b+'\n\n\nGRAFICA THE DOMANDONE',
-      'domandone-answer':b+'\n\n\nGRAFICA DOMANDONE\n\n\n\n\n\n\n\n\n\nGRAFICA RISPOSTA',
-      'temperature':'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA',
-      'headlines':b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO',
-      'lancio-trending':b,
-      'ospite':b+'\n\nFOTO/VIDEO',
-      'poem':b+'\n\n\nARDE VA AL LEGGIO\n\n\n\n\nRULLO',
-      'saluti':''
-    };
-    // For trending and hotstuff: build real foto+rvm list from section data
-    if((tk==='trending'||tk==='hotstuff')&&sec){
-      var lines=[b,''];
-      var hasRvm=false;
-      if(sec.rvm&&sec.rvm.needed){ lines.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')); hasRvm=true; }
-      if(sec.rvms) sec.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){
-        lines.push('RVM'+(i+1)+(r.duration?' ('+r.duration+')':'')); hasRvm=true;
-      });
+
+    // Build media lines (RVM, coperture, foto) from section — applies to ALL types
+    function buildMedia(sec){
+      var lines=[];
+      // RVM
+      if(sec.rvm&&sec.rvm.needed&&sec.rvm.status!=='non-serve'){
+        lines.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':''));
+      }
+      if(sec.rvms&&sec.rvms.length){
+        sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'&&r.status!=='standby'; }).forEach(function(r,i){
+          lines.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':''));
+        });
+      }
+      // Coperture
+      if(sec.coperture&&sec.coperture.length){
+        sec.coperture.filter(function(c){ return c.status&&c.status!=='non-serve'; }).forEach(function(c,i){
+          lines.push('COPERTURA'+(sec.coperture.length>1?i+1:'')+(c.notes?' – '+c.notes.slice(0,30):''));
+        });
+      }
+      // Foto
       if(sec.foto&&sec.foto.length){
         sec.foto.forEach(function(f,i){ lines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
-      } else if(!hasRvm){
-        lines.push('FOTO/VIDEO');
       }
-      // Add posProf note
-      if(sec.posProf==='lavagna') lines.push('\nARDE ALLA LAVAGNA');
-      else if(sec.posProf==='lavagna-italia') lines.push('\nARDE ALLA LAVAGNA ITALIA');
-      else if(sec.posProf==='altro') lines.push('\nARDE IN POSIZIONE');
+      return lines;
+    }
+
+    // posProf note
+    function posProfNote(sec){
+      if(!sec) return '';
+      if(sec.posProf==='lavagna') return '\nARDE ALLA LAVAGNA';
+      if(sec.posProf==='lavagna-italia') return '\nARDE ALLA LAVAGNA ITALIA';
+      if(sec.posProf==='altro') return '\nARDE IN POSIZIONE';
+      return '';
+    }
+
+    if(tk==='sigla') return 'SIGLA';
+    if(tk==='welcome') return b+'\n\nFIL E ARDE IN PIEDI'+(sec?posProfNote(sec):'');
+    if(tk==='bandierina') return b+'\n\n\nFOTO '+t+'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCARTINA ANIMATA'+(sec?posProfNote(sec):'');
+    if(tk==='domandone') return b+'\n\n\nGRAFICA DOMANDONE'+(sec?posProfNote(sec):'');
+    if(tk==='domandone-relaunch') return b+'\n\n\nGRAFICA THE DOMANDONE'+(sec?posProfNote(sec):'');
+    if(tk==='domandone-answer') return b+'\n\n\nGRAFICA DOMANDONE\n\n\n\n\n\n\n\n\n\nGRAFICA RISPOSTA'+(sec?posProfNote(sec):'');
+    if(tk==='temperature') return 'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA'+(sec?posProfNote(sec):'');
+    if(tk==='headlines') return b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO'+(sec?posProfNote(sec):'');
+    if(tk==='lancio-trending') return b+(sec?posProfNote(sec):'');
+    if(tk==='poem') return b+'\n\n\nARDE VA AL LEGGIO\n\n\n\n\nRULLO'+(sec?posProfNote(sec):'');
+    if(tk==='saluti') return ''+(sec?posProfNote(sec):'');
+
+    // Ospite
+    if(tk==='ospite'&&sec){
+      var lines=[b,''];
+      var media=buildMedia(sec);
+      if(media.length) lines=lines.concat(media);
+      else lines.push('FOTO/VIDEO');
+      lines.push(posProfNote(sec));
+      return lines.filter(function(l){return l!==undefined;}).join('\n');
+    }
+
+    // Trending and hotstuff
+    if((tk==='trending'||tk==='hotstuff')&&sec){
+      var lines=[b,''];
+      var media=buildMedia(sec);
+      if(media.length) lines=lines.concat(media);
+      else lines.push('FOTO/VIDEO');
+      var pp=posProfNote(sec);
+      if(pp) lines.push(pp);
       return lines.join('\n');
     }
-    // Add posProf note for other types too
-    var base=map[tk]||b;
-    if(sec&&sec.posProf==='lavagna') base+='\n\nARDE ALLA LAVAGNA';
-    else if(sec&&sec.posProf==='lavagna-italia') base+='\n\nARDE ALLA LAVAGNA ITALIA';
-    else if(sec&&sec.posProf==='altro') base+='\n\nARDE IN POSIZIONE';
-    return base;
+
+    return b+(sec?posProfNote(sec):'');
   }
 
   var COL=[400,900,5200,2400,1300];
@@ -3527,7 +3557,7 @@ function renderEpisodeView(){
         var scrSt=s.script&&s.script.status||'standby';
         if(scrSt!=='standby') pills+='<span style="'+pStyle(scrSt)+'">SCR</span>';
         // RVM — check both s.rvm (single, needed flag) and s.rvms (array, always needed if present and status != non-serve)
-        if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
+        if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; if(rst!=='standby'&&rst!=='non-serve') pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
         if(s.rvms&&s.rvms.length) s.rvms.filter(function(r){return r.status&&r.status!=='non-serve'&&r.status!=='nonserve';}).forEach(function(r,i){ pills+='<span style="'+pStyle(r.status||'richiesto')+'">RVM'+(s.rvms.length>1?i+1:'')+'</span>'; });
         if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills+='<span style="'+pStyle(fst)+'">F'+(i+1)+'</span>'; });
         if(s.coperture&&s.coperture.length) s.coperture.forEach(function(c,i){ var cst=c.status||'richiesto'; if(cst!=='standby') pills+='<span style="'+pStyle(cst)+'">COP'+(s.coperture.length>1?i+1:'')+'</span>'; });
@@ -6546,6 +6576,8 @@ function showOspiteModal(g, isNew){
       if(other) other.collegato=g.id;
     }
     if(isNew){ getOspiti().push(g); }
+    g.updatedAt=Date.now();
+    markModified(g.id);
     save(); document.body.removeChild(overlay); renderOspiti();
   };
   if(!isNew){
@@ -7126,7 +7158,8 @@ function renderDayView(){
     // RVM — check both s.rvm (single, needed flag) and s.rvms (array, always needed if status != non-serve)
     if(sec.rvm&&sec.rvm.needed){
       const dur=sec.rvm.duration?` ${sec.rvm.duration}`:'';
-      pills.push({code:'R', label:'RVM'+dur, st:sec.rvm.status||'richiesto'});
+      const rst=sec.rvm.status||'richiesto';
+      if(rst!=='standby'&&rst!=='non-serve') pills.push({code:'R', label:'RVM'+dur, st:rst});
     }
     if(sec.rvms&&sec.rvms.length) sec.rvms.filter(r=>r.status&&r.status!=='non-serve'&&r.status!=='nonserve').forEach((r,i)=>{
       pills.push({code:`R${sec.rvms.length>1?i+1:''}`, label:'RVM'+(r.duration?' '+r.duration:''), st:r.status||'richiesto'});
