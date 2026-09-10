@@ -3432,8 +3432,7 @@ function renderEpisodeView(){
         if(s.props&&s.props.needed){ var pst=s.props.status||'richiesto'; pills+='<span style="'+pStyle(pst)+'">PROPS</span>'; }
         inner='<div class="ep-slot" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[s.type]||s.type)+'" style="border-left-color:'+typeBorderColor(s.type)+';">'
           +'<div class="ep-slot-title" style="color:'+typeBorderColor(s.type)+'">'+(s.title||'&mdash;')+'</div>'
-          +(s.responsabile?'<div style="font-family:var(--mono);font-size:0.52rem;color:#fff;font-weight:700;margin-top:1px">'+esc(s.responsabile.toUpperCase())+'</div>':'')
-          +(pills?'<div style="display:flex;flex-wrap:wrap;margin-top:2px">'+pills+'</div>':'')
+          +(pills||s.responsabile?'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-top:2px">'+pills+(s.responsabile?'<span style="font-family:var(--mono);font-size:0.52rem;color:#fff;font-weight:700;margin-left:2px">'+esc(s.responsabile.toUpperCase())+'</span>':'')+'</div>':'')
           +'</div>';
       } else {
         inner='<div class="ep-empty">&mdash;</div>';
