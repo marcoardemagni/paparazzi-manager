@@ -3202,31 +3202,30 @@ function generaScalettaDocx(iso){
     var b='WALL TORINO';
     var t=title||'';
 
-    // Build media lines (RVM, coperture, foto) from section — applies to ALL types
+    // Build media lines with blank line between each item
     function buildMedia(sec){
-      var lines=[];
+      var items=[];
       // RVM
       if(sec.rvm&&sec.rvm.needed&&sec.rvm.status!=='non-serve'){
-        var rvmLabel='RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')+(sec.rvm.notes?' '+sec.rvm.notes:'');
-        lines.push(rvmLabel);
+        items.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')+(sec.rvm.notes?' '+sec.rvm.notes:''));
       }
       if(sec.rvms&&sec.rvms.length){
         sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'&&r.status!=='standby'; }).forEach(function(r,i){
-          var rvmLabel='RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':'')+(r.notes?' '+r.notes:'');
-          lines.push(rvmLabel);
+          items.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':'')+(r.notes?' '+r.notes:''));
         });
       }
       // Coperture
       if(sec.coperture&&sec.coperture.length){
         sec.coperture.filter(function(c){ return c.status&&c.status!=='non-serve'; }).forEach(function(c,i){
-          lines.push('COPERTURA'+(sec.coperture.length>1?i+1:'')+(c.notes?' – '+c.notes.slice(0,30):''));
+          items.push('COPERTURA'+(sec.coperture.length>1?i+1:'')+(c.notes?' – '+c.notes.slice(0,30):''));
         });
       }
       // Foto
       if(sec.foto&&sec.foto.length){
-        sec.foto.forEach(function(f,i){ lines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
+        sec.foto.forEach(function(f,i){ items.push('FOTO '+(i+1)+(f.desc?' – '+f.desc:'')); });
       }
-      return lines;
+      // Join with blank line between each
+      return items.join('\n\n');
     }
 
     // posProf note
@@ -3260,25 +3259,20 @@ function generaScalettaDocx(iso){
     if(tk==='poem') return b+'\n\n\nARDE VA AL LEGGIO\n\n\n\n\nRULLO'+(sec?posProfNote(sec):'');
     if(tk==='saluti') return ''+(sec?posProfNote(sec):'');
 
-    // Ospite
     if(tk==='ospite'&&sec){
-      var lines=[b,''];
       var media=buildMedia(sec);
-      if(media.length) lines=lines.concat(media);
-      else lines.push('FOTO/VIDEO');
-      lines.push(posProfNote(sec));
-      return lines.filter(function(l){return l!==undefined;}).join('\n');
+      var base=b+(media?'\n\n'+media:'\n\nFOTO/VIDEO');
+      base+=posProfNote(sec);
+      return base;
     }
 
     // Trending and hotstuff
     if((tk==='trending'||tk==='hotstuff')&&sec){
-      var lines=[b,''];
       var media=buildMedia(sec);
-      if(media.length) lines=lines.concat(media);
-      else lines.push('FOTO/VIDEO');
+      var base=b+(media?'\n\n'+media:'\n\nFOTO/VIDEO');
       var pp=posProfNote(sec);
-      if(pp) lines.push(pp);
-      return lines.join('\n');
+      if(pp) base+=pp;
+      return base;
     }
 
     return b+(sec?posProfNote(sec):'');
@@ -3310,6 +3304,8 @@ function generaScalettaDocx(iso){
     blockNum++;
     var dur=DEFAULT_DURATION[tk]||120;
     var timeStr=fmtTime(cumTime);
+    var durMin=Math.floor(dur/60), durSec=dur%60;
+    var durStr='['+durMin+':'+(durSec<10?'0':'')+durSec+']';
     cumTime+=dur;
     var wp=[mkPara((s.title||tk).toUpperCase())];
 
@@ -3424,7 +3420,14 @@ function generaScalettaDocx(iso){
     else if(tk==='saluti'){ wp.push(mkPara('SALUTI CHIUSURA + SIGLA')); }
 
     var _hl=_hlRow; _hlRow=false;
-    rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell([mkPara(timeStr,'',_hl)],1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title,s),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
+    var timeCell=[
+      mkPara(timeStr,'',_hl),
+      mkPara(''),
+      mkPara(''),
+      mkPara(''),
+      new d.Paragraph({children:[new d.TextRun({text:durStr,bold:true,font:'Arial',size:22})],spacing:{after:0}})
+    ];
+    rows.push(new d.TableRow({children:[mkCell([mkPara(String(blockNum),'',_hl)],0),mkCell(timeCell,1),mkCell(wp,2),mkCell([mkPara(getGrafica(tk,s.title,s),'',_hl,true)],3),mkCell([mkPara(SOUND[tk]||'',true,_hl)],4)]}));
     if(wp._graficaBandiera){ var bfSec=secs.find(function(sx){ return sx.type==='bandierina'; }); var bfTitle=bfSec&&bfSec.title?bfSec.title.trim():''; rows.push(new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara('GRAFICA BANDIERA','',false,true)],2),mkCell([mkPara('BANDIERA '+(bfTitle||'???'),'',false,true)],3),mkCell([mkPara('')],4)]})); }
     if(tk==='trending'&&(tCount-tIdx)>0) rows.push(bumperRow('BUMPER TRENDING N° '+(tCount-tIdx)));
     if(tk==='lancio-trending') rows.push(bumperRow('BUMPER TRENDING N° '+tCount));
