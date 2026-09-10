@@ -1664,7 +1664,14 @@ function openVistaPuntata(iso){
     }
     if(s.rvm&&s.rvm.needed) badges+='<span class="vp-badge rvm">RVM</span>';
     if(s.talent&&s.talent.name) badges+='<span class="vp-badge talent">'+esc(s.talent.name)+'</span>';
-    var meta=[]; if(s.responsabile) meta.push(s.responsabile); if(s.fonte) meta.push(s.fonte);
+    var pStyle2=function(st){ return 'display:inline-flex;align-items:center;font-family:var(--mono);font-size:0.52rem;font-weight:700;padding:1px 4px;border-radius:3px;color:var(--s-'+st+');border:1px solid var(--s-'+st+');margin-right:2px;'; };
+    var pills2='';
+    if(s.script&&s.script.status&&s.script.status!=='standby') pills2+='<span style="'+pStyle2(s.script.status)+'">SCR</span>';
+    if(s.rvm&&s.rvm.needed){ var rst2=s.rvm.status||'richiesto'; pills2+='<span style="'+pStyle2(rst2)+'">RVM</span>'; }
+    if(s.rvms) s.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){ pills2+='<span style="'+pStyle2(r.status||'richiesto')+'">RVM'+(i+1)+'</span>'; });
+    if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills2+='<span style="'+pStyle2(fst)+'">F'+(i+1)+'</span>'; });
+    if(s.props&&s.props.needed) pills2+='<span style="'+pStyle2(s.props.status||'richiesto')+'">PROPS</span>';
+    var meta2=pills2+(s.responsabile?'<span style="font-family:var(--mono);font-size:0.65rem;color:#fff;font-weight:700;margin-left:4px">'+esc(s.responsabile.toUpperCase())+'</span>':'');
     var isConflict=t==='trending'&&tCount>4;
     var canReorder=(t==='trending'||t==='hotstuff');
     var reorderBtns='';
@@ -1678,7 +1685,7 @@ function openVistaPuntata(iso){
       +'<div class="vp-row-num">'+blockNum+'</div>'
       +'<div class="vp-row-body">'
       +'<div class="vp-row-title" style="color:'+typeBorderColor(t)+'">'+esc(rowTitle)+'</div>'
-      +(meta.length?'<div class="vp-row-meta">'+esc(meta.join(' · '))+'</div>':'')
+      +(meta2?'<div class="vp-row-meta">'+meta2+'</div>':'')
       +'</div>'
       +'<div class="vp-row-badges">'+badges+reorderBtns+'</div>'
       +'</div>';
@@ -3415,7 +3422,8 @@ function renderEpisodeView(){
       if(s){
         var pills='';
         var pStyle=function(st){ return 'display:inline-flex;align-items:center;font-family:var(--mono);font-size:0.52rem;font-weight:700;padding:1px 4px;border-radius:3px;color:var(--s-'+st+');border:1px solid var(--s-'+st+');margin-right:2px;margin-top:2px;'; };
-        if(s.script&&s.script.status&&s.script.status!=='standby') pills+='<span style="'+pStyle(s.script.status)+'">SCR</span>';
+        var scrSt=s.script&&(s.script.status||s.script.dialogo?'dialogato':'');
+        if(scrSt&&scrSt!=='standby') pills+='<span style="'+pStyle(scrSt)+'">SCR</span>';
         if(s.rvm&&s.rvm.needed){ var rst=s.rvm.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM</span>'; }
         if(s.rvms) s.rvms.filter(function(r){return r.needed;}).forEach(function(r,i){ var rst=r.status||'richiesto'; pills+='<span style="'+pStyle(rst)+'">RVM'+(i+1)+'</span>'; });
         if(s.foto&&s.foto.length) s.foto.forEach(function(f,i){ var fst=f.status||'standby'; if(fst!=='standby') pills+='<span style="'+pStyle(fst)+'">F'+(i+1)+'</span>'; });
