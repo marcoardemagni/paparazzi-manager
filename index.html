@@ -4336,7 +4336,7 @@ function renderPanelBody(sec){
     +typeOpts
     +'</select></div>'
     +'<div><div class="flbl">Durata</div>'
-    +'<input class="finput" id="f-durata" value="'+esc(sec.durata||'')+'" placeholder="'+esc(sec.durata?sec.durata:secToDurataDefault(sec))+'">'
+    +'<input class="finput" id="f-durata" value="'+esc(sec.durata||secToDurataDefault(sec))+'" placeholder="es. 2\'30\'\'">'
     +'</div>'
     +'<div><div class="flbl">Responsabile</div>'
     +'<input class="finput" id="f-resp" value="'+esc(sec.responsabile)+'" placeholder="Nome\u2026">'
