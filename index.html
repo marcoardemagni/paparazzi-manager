@@ -883,22 +883,60 @@ function mkSection(){
   return {
     id: 'sec_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
     title:'',
+    nickname:'',
     type:'trending',
     fonte:'',
     responsabile:'',
     note:'',
     rvm:{needed:false,status:'richiesto',notes:'',duration:''},
+    rvms:[],
     foto:[],
     coperture:[],
     props:{needed:false,notes:''},
     audio:{needed:false,status:'richiesto',notes:''},
     script:{status:'standby',notes:''},
     info:'',
-    assignment:null, // {date:'YYYY-MM-DD', blocco:1}
+    assignment:null,
     createdAt: new Date().toISOString(),
     updatedAt: Date.now(),
-    prodStatus: { fattibile: false, dataRicezione: '', grezzoRicevuto: false, inMontaggio: false, pronto: false }
+    prodStatus: { fattibilita: 0, dataRicezione: '', grezzoRicevuto: false, inMontaggio: false, pronto: false }
   };
+}
+
+// Fattibilita labels and colors
+var FATTIBILITA=[
+  {val:0, label:'Non contattati', color:'#555'},
+  {val:1, label:'Contattati, in attesa', color:'#f59e0b'},
+  {val:2, label:'Difficoltà / incertezza', color:'#f97316'},
+  {val:3, label:'Non fattibile', color:'#ef4444'},
+  {val:4, label:'Fattibile ✓', color:'#22c55e'}
+];
+
+// Auto-generate nickname from title, avoiding already-used nicknames
+function autoNickname(title, excludeSecId){
+  if(!title) return '';
+  var STOP=['il','la','lo','le','i','gli','un','una','uno','di','da','a','in','su','per',
+    'tra','fra','con','al','del','della','delle','dei','degli','alla','allo','alle',
+    'dal','dalla','dai','negli','nel','nella','nelle','nei','e','o','mostra','festival',
+    'concerto','fiera','expo','rassegna','premio','corso','edizione','gran','gara'];
+  var usedNicks=new Set(
+    S.sections.filter(function(s){ return s.nickname&&s.id!==excludeSecId; })
+      .map(function(s){ return s.nickname.toLowerCase(); })
+  );
+  var words=title.split(/\s+/).slice(0,7)
+    .map(function(w){ return w.replace(/[^a-zàèéìòùü]/gi,''); })
+    .filter(function(w){ return w.length>1&&!STOP.includes(w.toLowerCase()); });
+  if(!words.length) return '';
+  words.sort(function(a,b){ return b.length-a.length; });
+  // Find first word not already used as nickname
+  for(var i=0;i<words.length;i++){
+    if(!usedNicks.has(words[i].toLowerCase())) return words[i];
+  }
+  // All words taken — append number
+  var base=words[0];
+  var n=2;
+  while(usedNicks.has((base+n).toLowerCase())) n++;
+  return base+n;
 }
 
 /* ═══════════════════════════════════
@@ -1370,20 +1408,43 @@ function elemColor(st){
 ═══════════════════════════════════ */
 var sezFilter='default'; // 'default' | 'two' | 'all'
 
+function checkNicknameDup(input, secId){
+  var val=(input.value||'').trim().toLowerCase();
+  var warn=document.getElementById('nick-dup-warn');
+  if(!warn) return;
+  if(!val){ warn.style.display='none'; return; }
+  var dup=S.sections.some(function(s){ return s.id!==secId&&(s.nickname||'').toLowerCase()===val; });
+  warn.style.display=dup?'':'none';
+  input.style.color=dup?'#f87171':'var(--acc)';
+}
+
+function setFattibilita(val){
+  var sec=S.sections.find(function(s){ return s.id===editingId; });
+  if(!sec) return;
+  if(!sec.prodStatus) sec.prodStatus={};
+  sec.prodStatus.fattibilita=val;
+  sec.updatedAt=Date.now();
+  markModified(sec.id);
+  save();
+  renderPanelBody(sec);
+}
+
 function updateProdStatus(){
   var sec=S.sections.find(function(s){ return s.id===editingId; });
   if(!sec) return;
   if(!sec.prodStatus) sec.prodStatus={};
-  var c1=document.getElementById('ps-fattibile').checked;
-  var c2=c1&&document.getElementById('ps-grezzo').checked;
-  var c3=c2&&document.getElementById('ps-montaggio').checked;
-  var c4=c3&&document.getElementById('ps-pronto').checked;
-  var dataRic=document.getElementById('ps-data-ric').value||'';
-  sec.prodStatus={fattibile:c1,dataRicezione:dataRic,grezzoRicevuto:c2,inMontaggio:c3,pronto:c4};
+  var nick=document.getElementById('f-nickname'); if(nick) sec.nickname=nick.value.trim();
+  var c2=document.getElementById('ps-grezzo')&&document.getElementById('ps-grezzo').checked;
+  var c3=c2&&document.getElementById('ps-montaggio')&&document.getElementById('ps-montaggio').checked;
+  var c4=c3&&document.getElementById('ps-pronto')&&document.getElementById('ps-pronto').checked;
+  var dataRic=document.getElementById('ps-data-ric')&&document.getElementById('ps-data-ric').value||'';
+  sec.prodStatus.grezzoRicevuto=c2;
+  sec.prodStatus.inMontaggio=c3;
+  sec.prodStatus.pronto=c4;
+  sec.prodStatus.dataRicezione=dataRic;
   sec.updatedAt=Date.now();
   markModified(sec.id);
   save();
-  // Re-render panel to update enabled/disabled states
   renderPanelBody(sec);
 }
 
@@ -1422,15 +1483,27 @@ function parseAggiornamenti(btn){
     if(!s.title||!s.title.trim()) return false;
     var t=s.title.trim().toUpperCase();
     return !STANDARD_TITLES.includes(t);
-  }).map(function(s){ return s.title.trim(); }).join('\n');
+  }).map(function(s){
+    var nick=s.nickname||autoNickname(s.title);
+    return s.title.trim()+(nick?' (nick: '+nick+')':'');
+  }).join('\n');
 
   var systemPrompt='You are an assistant for an Italian TV show. Match updates to existing sections and return ONLY a JSON array, no other text.\n'
     +'For each update line:\n'
-    +'1. Find the closest matching section title from the sections list (fuzzy match OK)\n'
-    +'2. If found: set action to update the right field\n'
-    +'3. If NOT found: set action "create" and matchedTitle = the actual EVENT NAME from the update (never use "Trending" or generic names)\n\n'
-    +'Actions: update_rvm_status (value: richiesto|girato|montato|descritto), update_rvm_data (value: YYYY-MM-DD), update_fattibile (value: false — use when unreachable/no response/waiting), create\n\n'
-    +'Return: [{"matchedTitle":"section title or event name","action":"...","value":"...","originalText":"...","confidence":"high|medium|low"}]';
+    +'1. Find the closest matching section title or nickname from the list (fuzzy match OK)\n'
+    +'2. If found: set the right action\n'
+    +'3. If NOT found: action "create", matchedTitle = actual event name (never use generic names like Trending)\n\n'
+    +'Actions:\n'
+    +'- update_rvm_status: value = richiesto|girato|montato|descritto|dialogato\n'
+    +'- update_rvm_data: value = YYYY-MM-DD (delivery date)\n'
+    +'- update_fattibilita: value = 0(not contacted)|1(waiting)|2(difficulties)|3(not feasible)|4(feasible). Use 3 for no response/unreachable, 1 for waiting confirmation, 2 for making difficulties\n'
+    +'- add_foto: value = photo description\n'
+    +'- assign_puntata: value = YYYY-MM-DD\n'
+    +'- update_responsabile: value = person name\n'
+    +'- update_duration: value = duration string like 1\'30\'\' (for RVM or copertura)\n'
+    +'- update_tipo: value = trending|hotstuff|ospite\n'
+    +'- create: matchedTitle = actual event name\n\n'
+    +'Return: [{"matchedTitle":"...","action":"...","value":"...","originalText":"...","confidence":"high|medium|low"}]';
 
   var userPrompt='Sections list:\n'+secList+'\n\nUpdates:\n'+input;
 
@@ -1467,7 +1540,12 @@ function parseAggiornamenti(btn){
             var actionLabel={
               'update_rvm_status':'RVM → '+u.value,
               'update_rvm_data':'Data ricezione RVM → '+u.value,
-              'update_fattibile':'Fattibilità → '+(u.value==='false'||u.value===false?'❌ Non fattibile':'✓ Fattibile'),
+              'update_fattibilita':'Fattibilità → '+(FATTIBILITA.find(function(f){return f.val===parseInt(u.value);})||{label:u.value}).label,
+              'update_fattibile':'Fattibilità → '+(u.value==='false'||u.value===false?'Non fattibile':'Fattibile'),
+              'add_foto':'➕ Foto: '+u.value,
+              'update_duration':'⏱ Durata → '+u.value,
+              'update_responsabile':'👤 Responsabile → '+u.value,
+              'update_tipo':'Tipo → '+u.value,
               'create':'Crea nuova sezione'
             }[u.action]||u.action;
             return '<div style="background:var(--bg3);border-radius:5px;padding:0.5rem 0.6rem;font-size:0.8rem;border-left:3px solid '+confColor+'">'
@@ -1504,17 +1582,42 @@ function confermaAggiornamenti(btn){
     if(sec.responsabile===''&&CURRENT_USER) sec.responsabile=CURRENT_USER;
     if(!sec.prodStatus) sec.prodStatus={fattibile:false,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
     if(u.action==='update_rvm_status'){
-      // Update first rvm in rvms array, or rvm if no rvms
       var val=u.value;
       if(sec.rvms&&sec.rvms.length){ sec.rvms[0].status=val; }
       else if(sec.rvm){ sec.rvm.status=val; sec.rvm.needed=true; }
       applied++;
     } else if(u.action==='update_rvm_data'){
-      if(sec.rvms&&sec.rvms.length){ sec.rvms[0].notes=(sec.rvms[0].notes||'')+' (arriva '+u.value+')'; }
-      else if(sec.rvm){ sec.rvm.notes=(sec.rvm.notes||'')+' (arriva '+u.value+')'; }
+      var note=' (arriva '+u.value+')';
+      if(sec.rvms&&sec.rvms.length){ sec.rvms[0].notes=(sec.rvms[0].notes||'')+note; }
+      else if(sec.rvm){ sec.rvm.notes=(sec.rvm.notes||'')+note; }
+      if(!sec.prodStatus) sec.prodStatus={};
+      sec.prodStatus.dataRicezione=u.value;
       applied++;
-    } else if(u.action==='update_fattibile'){
-      sec.prodStatus.fattibile=(u.value!=='false'&&u.value!==false&&u.value!==0);
+    } else if(u.action==='update_fattibilita'||u.action==='update_fattibile'){
+      if(!sec.prodStatus) sec.prodStatus={};
+      var fval=u.value;
+      if(fval==='false'||fval===false) sec.prodStatus.fattibilita=3;
+      else if(fval==='true'||fval===true) sec.prodStatus.fattibilita=4;
+      else sec.prodStatus.fattibilita=parseInt(fval)||0;
+      applied++;
+    } else if(u.action==='add_foto'){
+      if(!sec.foto) sec.foto=[];
+      sec.foto.push({desc:u.value||'',status:'richiesto'});
+      applied++;
+    } else if(u.action==='assign_puntata'){
+      if(!sec.assignment) sec.assignment={blocco:99,epNum:''};
+      sec.assignment.date=u.value;
+      applied++;
+    } else if(u.action==='update_responsabile'){
+      sec.responsabile=u.value||'';
+      applied++;
+    } else if(u.action==='update_duration'){
+      if(sec.rvms&&sec.rvms.length){ sec.rvms[0].duration=u.value; }
+      else if(sec.rvm){ sec.rvm.duration=u.value; }
+      if(sec.coperture&&sec.coperture.length){ sec.coperture[0].duration=u.value; }
+      applied++;
+    } else if(u.action==='update_tipo'){
+      sec.type=u.value||'hotstuff';
       applied++;
     }
     sec.updatedAt=Date.now();
@@ -3394,6 +3497,33 @@ function generaScalettaDocx(iso){
   var dayStr=dayNames[dt.getDay()]+' '+dt.getDate()+' '+monthNames[dt.getMonth()]+' '+dt.getFullYear();
 
   var DEFAULT_DURATION={sigla:15,welcome:120,bandierina:150,domandone:60,temperature:60,headlines:570,'lancio-trending':30,trending:180,hotstuff:240,ospite:600,'domandone-relaunch':60,'domandone-answer':90,poem:120,saluti:60};
+
+  // Parse duration string like "2'30''" or "2:30" → seconds
+  function parseDurataToSec(s){
+    if(!s) return 0;
+    s=s.trim();
+    var m;
+    if((m=s.match(/^(\d+)[':'](\d+)[''"]*$/))) return parseInt(m[1])*60+parseInt(m[2]);
+    if((m=s.match(/^(\d+)[''"]*$/))) return parseInt(m[1]);
+    return 0;
+  }
+  // Format seconds → "M'SS''"
+  function secToDurata(sec){ var m=Math.floor(sec/60),s=sec%60; return m+'\''+String(s).padStart(2,'0')+'\'\''; }
+
+  // Get effective section duration in seconds — respects RVM minimum
+  function getSecDurSec(s, tk){
+    var base=DEFAULT_DURATION[tk]||120;
+    // Override with explicit durata field
+    var explicit=parseDurataToSec(s.durata);
+    if(explicit>0) base=explicit;
+    // Find max RVM duration
+    var maxRvm=0;
+    if(s.rvm&&s.rvm.duration){ var r=parseDurataToSec(s.rvm.duration); if(r>maxRvm) maxRvm=r; }
+    if(s.rvms) s.rvms.forEach(function(r){ var rs=parseDurataToSec(r.duration); if(rs>maxRvm) maxRvm=rs; });
+    // Enforce minimum: RVM + 30s
+    if(maxRvm>0&&base<maxRvm+30) base=maxRvm+30;
+    return base;
+  }
   var SOUND={sigla:'ANGELINA',welcome:'ANGELINA\nFADE OUT',bandierina:'ANGELINA\nFADE OUT',domandone:'',temperature:'',headlines:'TOGLIERE AUDIO SU RASSEGNA','lancio-trending':'RAICOM 1',trending:'RAICOM 1',hotstuff:'RAICOM 1',ospite:'RAICOM 1','domandone-relaunch':'RAICOM 1','domandone-answer':'RAICOM 1',poem:'RAICOM 1\nAPPLAUSI\nANGELINA FADE OUT',saluti:'ANGELINA\nFINALE'};
 
   function getTk(s){ var t=s.type,ti=(s.title||'').toLowerCase(); if(t==='domandone'){ if(ti.includes('relaunch')) return 'domandone-relaunch'; if(ti.includes('answer')) return 'domandone-answer'; return 'domandone';} return t; }
@@ -3407,11 +3537,11 @@ function generaScalettaDocx(iso){
       var items=[];
       // RVM
       if(sec.rvm&&sec.rvm.needed&&sec.rvm.status!=='non-serve'){
-        items.push('RVM'+(sec.rvm.duration?' ('+sec.rvm.duration+')':'')+(sec.rvm.notes?' '+sec.rvm.notes:''));
+        items.push('RVM'+(sec.rvm.notes?' '+sec.rvm.notes:'')+(sec.rvm.duration?' - '+sec.rvm.duration:''));
       }
       if(sec.rvms&&sec.rvms.length){
         sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'&&r.status!=='standby'; }).forEach(function(r,i){
-          items.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.duration?' ('+r.duration+')':'')+(r.notes?' '+r.notes:''));
+          items.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.notes?' '+r.notes:'')+(r.duration?' - '+r.duration:''));
         });
       }
       // Coperture
@@ -3508,7 +3638,7 @@ function generaScalettaDocx(iso){
     if(tk==='hotstuff'){ var si=secs.indexOf(s); var prev=si>0?secs[si-1]:null; if(!prev||prev.type!=='hotstuff') rows.push(bumperRow('BUMPER: HOT STUFF')); }
 
     blockNum++;
-    var dur=DEFAULT_DURATION[tk]||120;
+    var dur=getSecDurSec(s, tk);
     var timeStr=fmtTime(cumTime);
     var durMin=Math.floor(dur/60), durSec=dur%60;
     var durStr='['+durMin+':'+(durSec<10?'0':'')+durSec+']';
@@ -4157,21 +4287,41 @@ function openSection(id){
 
 function renderPanelBody(sec){
   let h='';
-  if(!sec.prodStatus) sec.prodStatus={fattibile:false,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
+  if(!sec.prodStatus) sec.prodStatus={fattibilita:0,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
+  // Migrate old fattibile boolean to new fattibilita scale
+  if(sec.prodStatus.fattibile!==undefined&&sec.prodStatus.fattibilita===undefined){
+    sec.prodStatus.fattibilita=sec.prodStatus.fattibile?4:0;
+  }
   var ps=sec.prodStatus;
+  if(!sec.nickname) sec.nickname=autoNickname(sec.title, sec.id);
 
-  // PROD STATUS BAR — always visible at top
-  h+='<div style="display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.7rem;background:var(--bg3);border-radius:6px;margin-bottom:0.8rem;flex-wrap:wrap">'
-    +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);letter-spacing:0.5px;flex-shrink:0">STATO PRODUZIONE</div>'
-    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.fattibile?'color:var(--acc)':'')+'">'
-    +'<input type="checkbox" id="ps-fattibile" '+(ps.fattibile?'checked':'')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> Fattibile</label>'
-    +'<input class="finput" id="ps-data-ric" type="date" value="'+(ps.dataRicezione||'')+'" title="Data probabile ricezione materiale" '+(ps.fattibile?'':'disabled')+' style="width:140px;font-size:0.75rem;padding:0.15rem 0.4rem;opacity:'+(ps.fattibile?1:0.4)+'">'
-    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.grezzoRicevuto?'color:var(--acc)':'')+(ps.fattibile?'':';opacity:0.35;pointer-events:none')+'">'
-    +'<input type="checkbox" id="ps-grezzo" '+(ps.grezzoRicevuto?'checked':'')+' '+(ps.fattibile?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> Grezzo ricevuto</label>'
+  // NICKNAME + PROD STATUS BAR
+  h+='<div style="background:var(--bg3);border-radius:6px;padding:0.5rem 0.7rem;margin-bottom:0.8rem">'
+    // Nickname row
+    +'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">'
+    +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);flex-shrink:0">NICKNAME</div>'
+    +'<input class="finput" id="f-nickname" value="'+esc(sec.nickname||'')+'" placeholder="'+esc(autoNickname(sec.title,sec.id)||'es. Klee')+'" style="flex:1;font-size:0.8rem;padding:0.15rem 0.4rem;font-family:var(--mono);font-weight:700;color:var(--acc)" oninput="checkNicknameDup(this,\''+sec.id+'\')">'
+    +'<span id="nick-dup-warn" style="font-size:0.68rem;color:#f87171;display:none">⚠ già usato</span>'
+    +'</div>'
+    // Fattibilita pipeline
+    +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);margin-bottom:0.4rem">FATTIBILITÀ</div>'
+    +'<div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin-bottom:0.5rem">'
+    +FATTIBILITA.map(function(f){
+      var active=(ps.fattibilita||0)===f.val;
+      return '<button onclick="setFattibilita('+f.val+')" style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:4px;border:1px solid '+(active?f.color:'var(--brd)')+';background:'+(active?f.color+'22':'transparent')+';color:'+(active?f.color:'var(--text3)')+';cursor:pointer;font-weight:'+(active?'700':'400')+'">'+f.label+'</button>';
+    }).join('')
+    +'</div>'
+    // Rest of prod status
+    +'<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">'
+    +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);flex-shrink:0">PRODUZIONE</div>'
+    +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.grezzoRicevuto?'color:var(--acc)':'')+'">'
+    +'<input type="checkbox" id="ps-grezzo" '+(ps.grezzoRicevuto?'checked':'')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> Grezzo ricevuto</label>'
+    +'<input class="finput" id="ps-data-ric" type="date" value="'+(ps.dataRicezione||'')+'" title="Data probabile ricezione materiale" style="width:140px;font-size:0.75rem;padding:0.15rem 0.4rem;" data-no-prefill="1">'
     +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.inMontaggio?'color:var(--acc)':'')+(ps.grezzoRicevuto?'':';opacity:0.35;pointer-events:none')+'">'
     +'<input type="checkbox" id="ps-montaggio" '+(ps.inMontaggio?'checked':'')+' '+(ps.grezzoRicevuto?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:var(--acc)"> In montaggio</label>'
     +'<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;cursor:pointer;'+(ps.pronto?'color:#4ade80':'')+(ps.inMontaggio?'':';opacity:0.35;pointer-events:none')+'">'
     +'<input type="checkbox" id="ps-pronto" '+(ps.pronto?'checked':'')+' '+(ps.inMontaggio?'':'disabled')+' onchange="updateProdStatus()" style="accent-color:#4ade80"> ✓ Pronto</label>'
+    +'</div>'
     +'</div>';
 
   // TYPE options - built separately to avoid nested template literal issues on iOS
@@ -4186,7 +4336,7 @@ function renderPanelBody(sec){
     +typeOpts
     +'</select></div>'
     +'<div><div class="flbl">Durata</div>'
-    +'<input class="finput" id="f-durata" value="'+esc(sec.durata||'')+'" placeholder="es. 2\'30\'\'">'
+    +'<input class="finput" id="f-durata" value="'+esc(sec.durata||'')+'" placeholder="'+esc(sec.durata?sec.durata:secToDurataDefault(sec))+'">'
     +'</div>'
     +'<div><div class="flbl">Responsabile</div>'
     +'<input class="finput" id="f-resp" value="'+esc(sec.responsabile)+'" placeholder="Nome\u2026">'
@@ -4760,8 +4910,12 @@ function renderPanelBody(sec){
         +'</div>'
         +'<div class="flbl" style="margin-bottom:4px">Stato</div>'
         +pipeBar('f-cop-st-'+i, c.status||'richiesto', 'copertura', i, ['richiesto','girato','montato','descritto'], {richiesto:'Richiesto',girato:'Girato',montato:'Montato',descritto:'Descritto'})
-        +'<div class="flbl" style="margin-top:0.5rem">Descrizione contenuto</div>'
-        +'<textarea class="ftextarea" id="f-cop-notes-'+i+'" placeholder="Descrivi la copertura\u2026" style="min-height:38px">'+esc(c.notes||'')+'</textarea>'
+        +'<div style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;margin-top:0.5rem;align-items:start">'
+        +'<div><div class="flbl">Descrizione contenuto</div>'
+        +'<textarea class="ftextarea" id="f-cop-notes-'+i+'" placeholder="Descrivi la copertura\u2026" style="min-height:38px">'+esc(c.notes||'')+'</textarea></div>'
+        +'<div><div class="flbl">Durata</div>'
+        +'<input class="finput" id="f-cop-dur-'+i+'" value="'+esc(c.duration||'')+'" placeholder="1\'30\'\'" style="width:80px"></div>'
+        +'</div>'
         +'</div>';
     });
     h+='</div>'
@@ -4997,6 +5151,8 @@ function collectCoperture(sec){
   for(var i=0;i<sec.coperture.length;i++){
     var el=document.getElementById('f-cop-notes-'+i);
     if(el) sec.coperture[i].notes=el.value;
+    var dur=document.getElementById('f-cop-dur-'+i);
+    if(dur) sec.coperture[i].duration=dur.value;
   }
 }
 
@@ -7466,7 +7622,10 @@ function doChangeUser(){
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   var opts=members.map(function(m){
-    return '<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();renderSections()" style="width:100%;text-align:left;padding:0.6rem 0.9rem;background:'+(CURRENT_USER===m?'var(--acc)':'#fff')+';color:'+(CURRENT_USER===m?'#fff':'#1a1a2e')+';border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600;margin-bottom:0.4rem">'+m+'</button>';
+    return '<div style="display:flex;gap:0.4rem;margin-bottom:0.4rem">'
+      +'<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();renderSections()" style="flex:1;text-align:left;padding:0.6rem 0.9rem;background:'+(CURRENT_USER===m?'var(--acc)':'#fff')+';color:'+(CURRENT_USER===m?'#fff':'#1a1a2e')+';border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600">'+m+'</button>'
+      +'<button onclick="setCurrentUser(\''+m+'\');this.closest(\'div[style*=fixed]\').remove();showView(\'lavorazione\');aggiornaDaTesto()" style="padding:0.6rem 0.8rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:600;white-space:nowrap">⚡ Update</button>'
+      +'</div>';
   }).join('');
   overlay.innerHTML='<div style="background:#ffffff;border-radius:14px;padding:1.8rem;width:300px;box-shadow:0 8px 40px rgba(0,0,0,0.25)">'
     +'<div style="font-weight:800;font-size:1rem;margin-bottom:1rem;text-align:center;color:#1a1a2e">👤 Chi sei?</div>'
@@ -7645,7 +7804,10 @@ function showPasswordGate(){
 function showUserSelector(){
   var members=getTeamMembers();
   var opts=members.map(function(m){
-    return '<button onclick="selectUser(\''+m+'\')" style="width:100%;text-align:left;padding:0.6rem 0.9rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600;margin-bottom:0.4rem" onmouseenter="this.style.background=\'#f0f0f0\'" onmouseleave="this.style.background=\'#fff\'">'+m+'</button>';
+    return '<div style="display:flex;gap:0.4rem;margin-bottom:0.4rem">'
+      +'<button onclick="selectUser(\''+m+'\')" style="flex:1;text-align:left;padding:0.6rem 0.9rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:600" onmouseenter="this.style.background=\'#f0f0f0\'" onmouseleave="this.style.background=\'#fff\'">'+m+'</button>'
+      +'<button onclick="selectUserAndUpdate(\''+m+'\')" style="padding:0.6rem 0.8rem;background:#fff;color:#1a1a2e;border:1px solid #ddd;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:600;white-space:nowrap" onmouseenter="this.style.background=\'#f0f0f0\'" onmouseleave="this.style.background=\'#fff\'">⚡ Update</button>'
+      +'</div>';
   }).join('');
   var gate=document.getElementById('pwd-gate');
   if(!gate) return;
@@ -7659,6 +7821,14 @@ function showUserSelector(){
       +'<div style="font-size:0.8rem;color:#888;margin-bottom:1.2rem">Seleziona il tuo nome</div>'
       +'<div style="text-align:left">'+opts+'</div>';
   }
+}
+
+function selectUserAndUpdate(name){
+  setCurrentUser(name);
+  var gate=document.getElementById('pwd-gate');
+  if(gate) gate.remove();
+  bootApp();
+  setTimeout(function(){ showView('lavorazione'); aggiornaDaTesto(); }, 2000);
 }
 
 function selectUser(name){
@@ -7703,6 +7873,29 @@ function migrateCategories(){
     if(map[g.macroarea]){ g.macroarea=map[g.macroarea]; changed=true; }
   });
   if(changed){ save(); console.log('Categorie migrate al nuovo schema'); }
+}
+
+var _DEFAULT_DURATION_SEC={sigla:15,welcome:120,bandierina:150,domandone:60,temperature:60,headlines:570,'lancio-trending':30,trending:180,hotstuff:240,ospite:600,'domandone-relaunch':60,'domandone-answer':90,poem:120,saluti:60};
+
+function parseDurataToSec(s){
+  if(!s) return 0;
+  s=s.trim();
+  var m;
+  if((m=s.match(/^(\d+)[':'](\d+)[''"]*$/))) return parseInt(m[1])*60+parseInt(m[2]);
+  if((m=s.match(/^(\d+)[''"]*$/))) return parseInt(m[1]);
+  return 0;
+}
+
+function secToDurata(sec){ var m=Math.floor(sec/60),s=sec%60; return m+'\''+String(s).padStart(2,'0')+'\'\''; }
+
+function secToDurataDefault(sec){
+  var tk=getTk(sec);
+  var base=_DEFAULT_DURATION_SEC[tk]||120;
+  var maxRvm=0;
+  if(sec.rvm&&sec.rvm.duration){ var r=parseDurataToSec(sec.rvm.duration); if(r>maxRvm) maxRvm=r; }
+  if(sec.rvms) sec.rvms.forEach(function(r){ var rs=parseDurataToSec(r.duration); if(rs>maxRvm) maxRvm=rs; });
+  if(maxRvm>0&&base<maxRvm+30) base=maxRvm+30;
+  return secToDurata(base);
 }
 
 function bootApp(){
