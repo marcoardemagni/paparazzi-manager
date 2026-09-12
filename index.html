@@ -1435,6 +1435,7 @@ function parseAggiornamenti(btn){
     messages:[{role:'user',content:userPrompt}]
   }).then(function(data){
     var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    console.log('Claude aggiornamenti response:', txt.slice(0,800));
     try{
       // Extract JSON array even if there's surrounding text
       var match=txt.match(/\[[\s\S]*\]/);
