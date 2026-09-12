@@ -1412,21 +1412,19 @@ function parseAggiornamenti(btn){
   if(st) st.textContent='Interpreto…';
   btn.disabled=true;
 
-  // Build section list for Claude context
-  var secList=S.sections.filter(function(s){ return s.title&&s.title.trim(); })
-    .map(function(s){ return s.title; }).join('\n');
+  // Only pass sections with custom titles (not standard template titles)
+  var STANDARD_TITLES=['SIGLA','WELCOME','HEADLINES','LANCIO TRENDING','TEMPERATURE','METEO',
+    'DOMANDONE','DOMANDONE RELAUNCH','DOMANDONE ANSWER','POEM','SALUTI','HEADER',
+    'SIGLA','HOT STUFF','BANDIERINA'];
+  var secList=S.sections.filter(function(s){
+    if(!s.title||!s.title.trim()) return false;
+    var t=s.title.trim().toUpperCase();
+    return !STANDARD_TITLES.includes(t);
+  }).map(function(s){ return s.title.trim(); }).join('\n');
 
-  var systemPrompt='You are an assistant for an Italian TV show production manager. '
-    +'You will receive a list of updates about video segments (sezioni). '
-    +'For each update, identify: the section title (match approximately to the existing sections list), '
-    +'the field to update, and the new value. '
-    +'Fields: rvm_status (values: richiesto/girato/montato/descritto/dialogato), '
-    +'rvm_dataRicezione (date YYYY-MM-DD), '
-    +'prodStatus_fattibile (true/false — set false when unreachable/no response). '
-    +'If no matching section exists, suggest creating it (action: "create"). '
-    +'Return ONLY a JSON array: [{"matchedTitle":"exact title from list or best guess","action":"update_rvm_status|update_rvm_data|update_fattibile|create","field":"rvm_status|rvm_dataRicezione|prodStatus_fattibile","value":"new value","originalText":"the original line","confidence":"high|medium|low"}]';
+  var systemPrompt='You are an assistant for an Italian TV show. Extract updates from the user text and match them to existing sections. Return ONLY a valid JSON array, no other text. Each item: {"matchedTitle":"closest title from the list","action":"update_rvm_status|update_rvm_data|update_fattibile|create","value":"richiesto|girato|montato|descritto|YYYY-MM-DD|false|true","originalText":"original line","confidence":"high|medium|low"}';
 
-  var userPrompt='Existing sections:\n'+secList+'\n\nUpdates to process:\n'+input;
+  var userPrompt='Sections list:\n'+secList+'\n\nUpdates:\n'+input;
 
   callClaude({
     model:'claude-sonnet-4-6',
