@@ -5699,14 +5699,14 @@ function cercaOvunque(){
   var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
   var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 
-  // Collect all events matching query, sorted by dateStart
+  // Collect all UNIQUE events matching query (not expanded by day)
   var matches=[];
+  var seen=new Set();
   (S.calEvents||[]).forEach(function(ev){
+    if(seen.has(ev.id)) return;
     if((ev.title||'').toLowerCase().includes(q)||(ev.note||'').toLowerCase().includes(q)||(ev.luogo||'').toLowerCase().includes(q)){
-      // Expand to all active dates
-      var expanded=expandCalEvent(ev);
-      expanded.forEach(function(item){ matches.push({ev:ev, date:item.date}); });
-      if(!expanded.length) matches.push({ev:ev, date:ev.dateStart});
+      seen.add(ev.id);
+      matches.push({ev:ev, date:ev.dateStart});
     }
   });
   matches.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
