@@ -5719,7 +5719,7 @@ function cercaOvunque(){
 
   var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">'
     +'<div style="font-family:var(--mono);font-size:0.7rem;font-weight:700;color:var(--text3);letter-spacing:0.05em">'+matches.length+' RISULTATI PER "'+esc(q.toUpperCase())+'"</div>'
-    +(matches.length?'<button class="btn btn-primary" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="creaSezioniDaBatch(\''+esc(q)+'\')">📋 Crea sezioni da questi eventi</button>':'')
+    +(matches.length?'<button class="btn btn-primary" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="creaSezioniDaBatch(document.getElementById(\'calSearch\').value)">📋 Crea sezioni da questi eventi</button>':'')
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:0.3rem">';
   matches.forEach(function(item){
