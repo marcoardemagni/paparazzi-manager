@@ -1398,19 +1398,21 @@ function aggiornaDaTesto(){
     +'<div id="aggtext-status" style="font-size:0.75rem;color:var(--text3);margin-bottom:0.5rem"></div>'
     +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
     +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
-    +'<button class="btn" id="aggtext-parse-btn" onclick="parseAggiornamenti(this)">🤖 Interpreta</button>'
-    +'<button class="btn btn-primary" id="aggtext-confirm-btn" style="display:none" onclick="confermaAggiornamenti(this)">✓ Applica modifiche</button>'
+    +'<button class="btn" id="aggtext-parse-btn" onclick="event.stopPropagation();parseAggiornamenti(this)">🤖 Interpreta</button>'
+    +'<button class="btn btn-primary" id="aggtext-confirm-btn" style="display:none" onclick="event.stopPropagation();confermaAggiornamenti(this)">✓ Applica modifiche</button>'
     +'</div></div>';
   document.body.appendChild(overlay);
   setTimeout(function(){ var ta=overlay.querySelector('#aggtext-input'); if(ta) ta.focus(); },50);
 }
 
 function parseAggiornamenti(btn){
+  if(btn._running) return;
+  btn._running=true;
+  btn.disabled=true;
   var input=document.getElementById('aggtext-input').value.trim();
-  if(!input){ alert('Inserisci la lista.'); return; }
+  if(!input){ alert('Inserisci la lista.'); btn.disabled=false; btn._running=false; return; }
   var st=document.getElementById('aggtext-status');
   if(st) st.textContent='Interpreto…';
-  btn.disabled=true;
 
   // Only pass sections with custom titles (not standard template titles)
   var STANDARD_TITLES=['SIGLA','WELCOME','HEADLINES','LANCIO TRENDING','TEMPERATURE','METEO',
