@@ -1487,13 +1487,15 @@ function confermaAggiornamenti(btn){
       var ns=mkSection();
       ns.title=(u.matchedTitle||'NUOVA SEZIONE').toUpperCase();
       ns.type='hotstuff';
+      ns.responsabile=CURRENT_USER||'';
       ns.assignment=null;
-      S.sections.push(ns);
       markModified(ns.id);
+      S.sections.push(ns);
       created++;
       return;
     }
     if(!sec) return;
+    if(sec.responsabile===''&&CURRENT_USER) sec.responsabile=CURRENT_USER;
     if(!sec.prodStatus) sec.prodStatus={fattibile:false,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
     if(u.action==='update_rvm_status'){
       // Update first rvm in rvms array, or rvm if no rvms
