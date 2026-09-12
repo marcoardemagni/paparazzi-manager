@@ -7889,7 +7889,7 @@ function parseDurataToSec(s){
 function secToDurata(sec){ var m=Math.floor(sec/60),s=sec%60; return m+'\''+String(s).padStart(2,'0')+'\'\''; }
 
 function secToDurataDefault(sec){
-  var tk=getTk(sec);
+  var tk=sec.type||'trending';
   var base=_DEFAULT_DURATION_SEC[tk]||120;
   var maxRvm=0;
   if(sec.rvm&&sec.rvm.duration){ var r=parseDurataToSec(sec.rvm.duration); if(r>maxRvm) maxRvm=r; }
