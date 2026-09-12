@@ -1424,7 +1424,13 @@ function parseAggiornamenti(btn){
     return !STANDARD_TITLES.includes(t);
   }).map(function(s){ return s.title.trim(); }).join('\n');
 
-  var systemPrompt='You are an assistant for an Italian TV show. Extract updates from the user text and match them to existing sections. Return ONLY a valid JSON array, no other text. Each item: {"matchedTitle":"closest title from the list","action":"update_rvm_status|update_rvm_data|update_fattibile|create","value":"richiesto|girato|montato|descritto|YYYY-MM-DD|false|true","originalText":"original line","confidence":"high|medium|low"}';
+  var systemPrompt='You are an assistant for an Italian TV show. Match updates to existing sections and return ONLY a JSON array, no other text.\n'
+    +'For each update line:\n'
+    +'1. Find the closest matching section title from the sections list (fuzzy match OK)\n'
+    +'2. If found: set action to update the right field\n'
+    +'3. If NOT found: set action "create" and matchedTitle = the actual EVENT NAME from the update (never use "Trending" or generic names)\n\n'
+    +'Actions: update_rvm_status (value: richiesto|girato|montato|descritto), update_rvm_data (value: YYYY-MM-DD), update_fattibile (value: false — use when unreachable/no response/waiting), create\n\n'
+    +'Return: [{"matchedTitle":"section title or event name","action":"...","value":"...","originalText":"...","confidence":"high|medium|low"}]';
 
   var userPrompt='Sections list:\n'+secList+'\n\nUpdates:\n'+input;
 
