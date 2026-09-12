@@ -580,6 +580,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <option value="assigned">Inserite in puntata</option>
         <option value="all">Tutte</option>
       </select>
+      <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;margin-left:auto" onclick="aggiornaDaTesto()">📋 Aggiorna da testo</button>
     </div>
     <div class="section-grid" id="sectionGrid"></div>
   </div>
@@ -743,6 +744,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
           <div style="padding:0.5rem 0.8rem;cursor:pointer;font-size:0.8rem;white-space:nowrap" onmouseenter="this.style.background='var(--surfl)'" onmouseleave="this.style.background=''" onclick="toggleCalImportMenu();importIcsFromUrl()">🔗 Da URL / OfficeholidAYS</div>
         </div>
       </div>
+      <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="nuovoBatch()">+ Nuovo Batch</button>
       <button class="btn btn-primary" style="font-size:0.78rem;padding:0.3rem 0.8rem" onclick="newCalEvent()">+ Nuovo evento</button>
     </div>
     <div id="calGrid"></div>
@@ -1383,6 +1385,132 @@ function updateProdStatus(){
   save();
   // Re-render panel to update enabled/disabled states
   renderPanelBody(sec);
+}
+
+function aggiornaDaTesto(){
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-weight:700;font-size:1rem;margin-bottom:0.3rem">📋 Aggiorna sezioni da testo</div>'
+    +'<div style="font-size:0.8rem;color:var(--text3);margin-bottom:0.8rem">Incolla la lista di aggiornamenti — Claude identificherà le sezioni e proporrà le modifiche.</div>'
+    +'<textarea id="aggtext-input" class="ftextarea" style="min-height:200px;margin-bottom:0.8rem" placeholder="Es:\nLouis Vuitton Dolomites - materiale grezzo arrivato\nMostra Brueghel - già montato\nPordenoneLegge - arriva lunedì 14 settembre"></textarea>'
+    +'<div id="aggtext-preview" style="display:none;margin-bottom:0.8rem"></div>'
+    +'<div id="aggtext-status" style="font-size:0.75rem;color:var(--text3);margin-bottom:0.5rem"></div>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
+    +'<button class="btn" id="aggtext-parse-btn" onclick="parseAggiornamenti(this)">🤖 Interpreta</button>'
+    +'<button class="btn btn-primary" id="aggtext-confirm-btn" style="display:none" onclick="confermaAggiornamenti(this)">✓ Applica modifiche</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  setTimeout(function(){ var ta=overlay.querySelector('#aggtext-input'); if(ta) ta.focus(); },50);
+}
+
+function parseAggiornamenti(btn){
+  var input=document.getElementById('aggtext-input').value.trim();
+  if(!input){ alert('Inserisci la lista.'); return; }
+  var st=document.getElementById('aggtext-status');
+  if(st) st.textContent='Interpreto…';
+  btn.disabled=true;
+
+  // Build section list for Claude context
+  var secList=S.sections.filter(function(s){ return s.title&&s.title.trim(); })
+    .map(function(s){ return s.title; }).join('\n');
+
+  var systemPrompt='You are an assistant for an Italian TV show production manager. '
+    +'You will receive a list of updates about video segments (sezioni). '
+    +'For each update, identify: the section title (match approximately to the existing sections list), '
+    +'the field to update, and the new value. '
+    +'Fields: rvm_status (values: richiesto/girato/montato/descritto/dialogato), '
+    +'rvm_dataRicezione (date YYYY-MM-DD), '
+    +'prodStatus_fattibile (true/false — set false when unreachable/no response). '
+    +'If no matching section exists, suggest creating it (action: "create"). '
+    +'Return ONLY a JSON array: [{"matchedTitle":"exact title from list or best guess","action":"update_rvm_status|update_rvm_data|update_fattibile|create","field":"rvm_status|rvm_dataRicezione|prodStatus_fattibile","value":"new value","originalText":"the original line","confidence":"high|medium|low"}]';
+
+  var userPrompt='Existing sections:\n'+secList+'\n\nUpdates to process:\n'+input;
+
+  callClaude({
+    model:'claude-sonnet-4-6',
+    max_tokens:2000,
+    system:systemPrompt,
+    messages:[{role:'user',content:userPrompt}]
+  }).then(function(data){
+    var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    try{
+      var clean=txt.replace(/```json|```/g,'').trim();
+      var updates=JSON.parse(clean);
+      window._aggUpdates=updates;
+
+      // Resolve each update to an actual section
+      updates.forEach(function(u){
+        u._sec=S.sections.find(function(s){ return s.title&&s.title.trim().toLowerCase()===( u.matchedTitle||'').toLowerCase(); })
+          || S.sections.find(function(s){ return s.title&&s.title.toLowerCase().includes((u.matchedTitle||'').toLowerCase().slice(0,15)); });
+      });
+
+      var prev=document.getElementById('aggtext-preview');
+      if(prev){
+        prev.style.display='block';
+        prev.innerHTML='<div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-bottom:0.4rem">'+updates.length+' AGGIORNAMENTI PROPOSTI</div>'
+          +'<div style="display:flex;flex-direction:column;gap:0.4rem">'
+          +updates.map(function(u,i){
+            var secFound=u._sec;
+            var confColor=u.confidence==='high'?'#4ade80':u.confidence==='medium'?'#fbbf24':'#f87171';
+            var actionLabel={
+              'update_rvm_status':'RVM → '+u.value,
+              'update_rvm_data':'Data ricezione RVM → '+u.value,
+              'update_fattibile':'Fattibilità → '+(u.value==='false'||u.value===false?'❌ Non fattibile':'✓ Fattibile'),
+              'create':'Crea nuova sezione'
+            }[u.action]||u.action;
+            return '<div style="background:var(--bg3);border-radius:5px;padding:0.5rem 0.6rem;font-size:0.8rem;border-left:3px solid '+confColor+'">'
+              +'<div style="font-weight:600;margin-bottom:2px">'+esc(u.matchedTitle||'—')+(secFound?' <span style="color:#4ade80;font-size:0.65rem">✓ trovata</span>':'<span style="color:#f87171;font-size:0.65rem"> ✗ non trovata</span>')+'</div>'
+              +'<div style="color:var(--acc);font-size:0.75rem">'+esc(actionLabel)+'</div>'
+              +'<div style="color:var(--text3);font-size:0.7rem;margin-top:2px">'+esc(u.originalText||'')+'</div>'
+              +'</div>';
+          }).join('')+'</div>';
+      }
+      if(st) st.textContent='Controlla le modifiche proposte e clicca "Applica" per confermare.';
+      var cb=document.getElementById('aggtext-confirm-btn'); if(cb) cb.style.display='';
+    } catch(e){ if(st) st.textContent='Errore nel parsing. Riprova.'; console.error(e,txt); }
+    btn.disabled=false;
+  }).catch(function(){ if(st) st.textContent='Errore di rete.'; btn.disabled=false; });
+}
+
+function confermaAggiornamenti(btn){
+  var updates=window._aggUpdates||[];
+  var applied=0; var created=0;
+  updates.forEach(function(u){
+    var sec=u._sec;
+    if(u.action==='create'){
+      var ns=mkSection();
+      ns.title=(u.matchedTitle||'NUOVA SEZIONE').toUpperCase();
+      ns.type='hotstuff';
+      ns.assignment=null;
+      S.sections.push(ns);
+      markModified(ns.id);
+      created++;
+      return;
+    }
+    if(!sec) return;
+    if(!sec.prodStatus) sec.prodStatus={fattibile:false,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
+    if(u.action==='update_rvm_status'){
+      // Update first rvm in rvms array, or rvm if no rvms
+      var val=u.value;
+      if(sec.rvms&&sec.rvms.length){ sec.rvms[0].status=val; }
+      else if(sec.rvm){ sec.rvm.status=val; sec.rvm.needed=true; }
+      applied++;
+    } else if(u.action==='update_rvm_data'){
+      if(sec.rvms&&sec.rvms.length){ sec.rvms[0].notes=(sec.rvms[0].notes||'')+' (arriva '+u.value+')'; }
+      else if(sec.rvm){ sec.rvm.notes=(sec.rvm.notes||'')+' (arriva '+u.value+')'; }
+      applied++;
+    } else if(u.action==='update_fattibile'){
+      sec.prodStatus.fattibile=(u.value!=='false'&&u.value!==false&&u.value!==0);
+      applied++;
+    }
+    sec.updatedAt=Date.now();
+    markModified(sec.id);
+  });
+  save(); render();
+  btn.closest('div[style*="fixed"]').remove();
+  alert('✓ Applicate '+applied+' modifiche'+(created?' + '+created+' sezioni create':'')+'.');
 }
 
 function setSezFilter(val){
@@ -5793,6 +5921,99 @@ function calTipoToSecType(categoria){
   if(c.includes('food')) return 'hotstuff';
   if(c.includes('moda')) return 'hotstuff';
   return 'hotstuff';
+}
+
+function getNextBatchTag(){
+  var tags=new Set();
+  (S.calEvents||[]).forEach(function(ev){
+    var m=(ev.note||'').match(/\[BT(\d+)\]/);
+    if(m) tags.add(parseInt(m[1]));
+  });
+  var n=1;
+  while(tags.has(n)) n++;
+  return '[BT'+String(n).padStart(2,'0')+']';
+}
+
+function nuovoBatch(){
+  var tag=getNextBatchTag();
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-weight:700;font-size:1rem;margin-bottom:0.3rem">📦 Nuovo Batch <span style="color:var(--acc);font-family:var(--mono)">'+tag+'</span></div>'
+    +'<div style="font-size:0.8rem;color:var(--text3);margin-bottom:0.8rem">Incolla la lista di eventi in formato libero — Claude li interpreterà e creerà gli eventi in calendario.</div>'
+    +'<textarea id="batch-input" class="ftextarea" style="min-height:180px;margin-bottom:0.8rem" placeholder="Es:\n• Tocatì - Festival dei giochi di strada (Verona, 18-20 settembre)\n• Mostra Brueghel a Palazzo Reale (Milano, dal 29 settembre)\n• Tiramisù World Cup (Treviso, 9-11 ottobre)"></textarea>'
+    +'<div id="batch-preview" style="display:none;margin-bottom:0.8rem"></div>'
+    +'<div id="batch-status" style="font-size:0.75rem;color:var(--text3);margin-bottom:0.5rem"></div>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
+    +'<button class="btn" id="batch-parse-btn" onclick="parseBatch(this,\''+tag+'\')">🤖 Interpreta lista</button>'
+    +'<button class="btn btn-primary" id="batch-confirm-btn" style="display:none" onclick="confermaBatch(this,\''+tag+'\')">✓ Crea eventi in calendario</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  setTimeout(function(){ var ta=overlay.querySelector('#batch-input'); if(ta) ta.focus(); },50);
+}
+
+function parseBatch(btn, tag){
+  var input=document.getElementById('batch-input').value.trim();
+  if(!input){ alert('Inserisci la lista di eventi.'); return; }
+  var st=document.getElementById('batch-status');
+  if(st) st.textContent='Interpreto la lista…';
+  btn.disabled=true;
+  var CAT_LIST='Sport, Avventura / Cultura, Letteratura / Cinema, TV, Radio / Teatro e Danza / Musica / Arti figurative / Food / Società / Moda / Tecnologia / Industria, Economia / Turismo, Viaggi / Politica, Istituzioni / Anniversari / Scienza e Natura / Tradizioni / Altro';
+  callClaude({
+    model:'claude-sonnet-4-6',
+    max_tokens:2000,
+    system:'You are a calendar assistant for an Italian TV show. Extract events from the user\'s text and return ONLY a JSON array. Each event: {"title":"...","dateStart":"YYYY-MM-DD","dateEnd":"YYYY-MM-DD or empty string","luogo":"...","categoria":"one of: '+CAT_LIST+'","note":"any extra editorial info, empty if none"}. Use empty string if unknown. Assume year 2026 if not specified. Today is '+new Date().toISOString().slice(0,10)+'.',
+    messages:[{role:'user',content:'Extract events from this list:\n\n'+input}]
+  }).then(function(data){
+    var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    try{
+      var clean=txt.replace(/```json|```/g,'').trim();
+      var events=JSON.parse(clean);
+      window._batchEvents=events;
+      var prev=document.getElementById('batch-preview');
+      if(prev){
+        prev.style.display='block';
+        prev.innerHTML='<div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-bottom:0.4rem">'+events.length+' EVENTI TROVATI</div>'
+          +'<div style="display:flex;flex-direction:column;gap:0.3rem">'
+          +events.map(function(ev){
+            return '<div style="background:var(--bg3);border-radius:5px;padding:0.4rem 0.6rem;font-size:0.8rem">'
+              +'<div style="font-weight:600">'+esc(ev.title||'—')+'</div>'
+              +'<div style="color:var(--text3);font-size:0.72rem">'+esc(ev.dateStart||'?')+(ev.dateEnd?' → '+esc(ev.dateEnd):'')+' · '+esc(ev.luogo||'?')+' · '+esc(ev.categoria||'Altro')+'</div>'
+              +(ev.note?'<div style="color:var(--text3);font-size:0.7rem;margin-top:2px">'+esc(ev.note)+'</div>':'')
+              +'</div>';
+          }).join('')+'</div>';
+      }
+      if(st) st.textContent='Controlla e clicca "Crea eventi in calendario" per confermare.';
+      var cb=document.getElementById('batch-confirm-btn'); if(cb) cb.style.display='';
+    } catch(e){ if(st) st.textContent='Errore nel parsing. Riprova.'; console.error(e,txt); }
+    btn.disabled=false;
+  }).catch(function(){ if(st) st.textContent='Errore di rete. Riprova.'; btn.disabled=false; });
+}
+
+function confermaBatch(btn, tag){
+  var events=window._batchEvents||[];
+  if(!events.length){ alert('Nessun evento da creare.'); return; }
+  var created=0;
+  events.forEach(function(ev){
+    if(!ev.title||!ev.dateStart) return;
+    var calEv=mkCalEvent();
+    calEv.title=ev.title.trim();
+    calEv.dateStart=ev.dateStart;
+    calEv.dateEnd=ev.dateEnd||ev.dateStart;
+    calEv.luogo=ev.luogo||'';
+    calEv.categoria=ev.categoria||'Altro';
+    calEv.rilevanza=9;
+    calEv.note=tag+(ev.note?' '+ev.note:'');
+    calEv.updatedAt=Date.now();
+    if(!S.calEvents) S.calEvents=[];
+    S.calEvents.push(calEv);
+    markModified(calEv.id);
+    created++;
+  });
+  save(); renderCalendario();
+  btn.closest('div[style*="fixed"]').remove();
+  alert('✓ Creati '+created+' eventi con tag '+tag+'. Cercali con "'+tag+'".');
 }
 
 function openCalEvent(id){
