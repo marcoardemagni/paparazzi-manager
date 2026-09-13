@@ -2159,13 +2159,45 @@ function deletePuntata(){
   if(!iso) return;
   var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
   if(!secs.length){ alert('Nessun blocco da eliminare per questa puntata.'); return; }
-  if(!confirm('Eliminare tutti i '+secs.length+' blocchi della puntata del '+iso+'?\nQuesta operazione non è reversibile.')) return;
-  if(!S.deletedIds) S.deletedIds=[];
-  secs.forEach(function(s){ S.deletedIds.push(s.id); });
-  S.sections=S.sections.filter(function(s){ return !(s.assignment&&s.assignment.date===iso); });
-  save();
-  closeVistaPuntata();
-  render();
+
+  // Format date for display
+  var nd=new Date(iso+'T12:00:00');
+  var DAYS=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var MONTHS=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var dateLabel=nd.getDate()+'/'+String(nd.getMonth()+1).padStart(2,'0')+'/'+nd.getFullYear();
+  var dateDisplay=DAYS[nd.getDay()]+' '+nd.getDate()+' '+MONTHS[nd.getMonth()]+' '+nd.getFullYear();
+
+  // Double confirmation overlay
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.5rem;width:420px;max-width:95vw;border:2px solid #c0392b">'
+    +'<div style="font-size:1.2rem;margin-bottom:0.5rem">🗑 Elimina puntata</div>'
+    +'<div style="font-size:0.85rem;margin-bottom:0.8rem">Stai per eliminare <b>tutti i '+secs.length+' blocchi</b> della puntata del <b>'+dateDisplay+'</b>.</div>'
+    +'<div style="font-size:0.85rem;color:#f87171;margin-bottom:1rem">⚠️ Questa operazione <b>non è reversibile</b>.</div>'
+    +'<div style="font-size:0.8rem;color:var(--text3);margin-bottom:0.4rem">Scrivi <b>'+dateLabel+'</b> per confermare:</div>'
+    +'<input id="del-confirm-input" class="finput" placeholder="'+dateLabel+'" style="margin-bottom:0.8rem;font-family:var(--mono);font-size:1rem;text-align:center" autofocus>'
+    +'<div style="display:flex;gap:0.5rem;justify-content:flex-end">'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove()">Annulla</button>'
+    +'<button class="btn" id="del-confirm-btn" style="background:#c0392b;color:#fff;border-color:#c0392b;opacity:0.4;pointer-events:none">Elimina definitivamente</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+
+  var input=overlay.querySelector('#del-confirm-input');
+  var btn=overlay.querySelector('#del-confirm-btn');
+  input.addEventListener('input', function(){
+    var match=input.value.trim()===dateLabel;
+    btn.style.opacity=match?'1':'0.4';
+    btn.style.pointerEvents=match?'auto':'none';
+  });
+  btn.onclick=function(){
+    overlay.remove();
+    if(!S.deletedIds) S.deletedIds=[];
+    secs.forEach(function(s){ S.deletedIds.push(s.id); markModified(s.id); });
+    S.sections=S.sections.filter(function(s){ return !(s.assignment&&s.assignment.date===iso); });
+    save();
+    closeVistaPuntata();
+    render();
+  };
 }
 
 /* ═══════════════════════════════════
@@ -3069,8 +3101,10 @@ function rivediDialogo(secId){
   if(!sec) return;
   var dialogo=(sec.script&&sec.script.dialogo)||
               (sec.script&&sec.script.bandierina&&sec.script.bandierina.dialogo)||
+              (sec.script&&sec.script.temperature&&sec.script.temperature.dialogo)||
               (document.getElementById('f-bf-dialogo')&&document.getElementById('f-bf-dialogo').value)||
-              (document.getElementById('f-poem-script')&&document.getElementById('f-poem-script').value)||'';
+              (document.getElementById('f-poem-script')&&document.getElementById('f-poem-script').value)||
+              (document.getElementById('f-tp-dialogo')&&document.getElementById('f-tp-dialogo').value)||'';
   if(!dialogo){ alert('Nessun dialogo da rivedere. Genera prima un dialogo.'); return; }
 
   // Show overlay with instructions textarea
@@ -3132,6 +3166,11 @@ function rivediDialogo(secId){
         sec.script.poem.testo=txt.trim();
         var poemEl=document.getElementById('f-poem-script');
         if(poemEl) poemEl.value=txt.trim();
+      } else if(sec.type==='temperature'){
+        if(!sec.script.temperature) sec.script.temperature={};
+        sec.script.temperature.dialogo=txt.trim();
+        var tpEl=document.getElementById('f-tp-dialogo');
+        if(tpEl) tpEl.value=txt.trim();
       } else {
         sec.script.dialogo=txt.trim();
         var el=document.getElementById('f-tr-dialogo');
@@ -4421,8 +4460,11 @@ function renderPanelBody(sec){
     h+='<button class="btn btn-primary" style="font-size:0.75rem;padding:0.25rem 0.9rem;margin-top:0.6rem" data-secid="'+sec.id+'" onclick="caricaMeteoTemp(this.dataset.secid)">&#x1F321;&#xFE0F; Carica meteo</button>'
       +'<div id="tp-meteo-status" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);margin-left:0.5rem;display:inline"></div>'
       +'</div>'
-      +'<button class="btn btn-primary" style="font-size:0.75rem;padding:0.25rem 0.9rem;margin-top:0.4rem" data-secid="'+sec.id+'" onclick="generaTestoMeteo(this.dataset.secid)">&#x1F916; Genera testo</button>'
-      +'<div id="tp-gen-status" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3);margin-left:0.5rem;display:inline"></div>'
+      +'<div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">'
+      +'<button class="btn btn-primary" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="generaTestoMeteo(this.dataset.secid)">&#x1F916; Genera testo</button>'
+      +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.9rem" data-secid="'+sec.id+'" onclick="rivediDialogo(this.dataset.secid)">&#x270F;&#xFE0F; Rivedi</button>'
+      +'<div id="tp-gen-status" style="font-family:var(--mono);font-size:0.68rem;color:var(--text3)"></div>'
+      +'</div>'
       +'<textarea class="ftextarea" id="f-tp-dialogo" style="min-height:120px;font-family:var(--mono);font-size:0.78rem;line-height:1.7;margin-top:0.5rem" placeholder="FILIPPO: ...\n\nARDE: ...">'+esc((sec.script.temperature||{}).dialogo||'')+'</textarea>'
     h+='<div class="flbl" style="margin-top:0.6rem">Note aggiuntive</div>'
       +'<textarea class="ftextarea" id="f-script-notes" placeholder="Note\u2026">'+esc(sec.script.notes)+'</textarea>'
