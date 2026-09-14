@@ -1227,6 +1227,39 @@ function cloudSave(){
                   var remoteSub=remote[subKey]||[];
                   if(remoteSub.length>localSub.length) hasConflict=true;
                 });
+                // Don't trigger conflict if only assignment.ordine changed
+                if(hasConflict){
+                  var rOrd=remote.assignment&&remote.assignment.ordine;
+                  var lOrd=item.assignment&&item.assignment.ordine;
+                  if(rOrd!==lOrd){
+                    // Check if ordine is the only diff in assignment
+                    var ra=Object.assign({},remote.assignment||{}); delete ra.ordine;
+                    var la=Object.assign({},item.assignment||{}); delete la.ordine;
+                    if(JSON.stringify(ra)===JSON.stringify(la)){
+                      // Merge remote ordine into local silently
+                      if(!item.assignment) item.assignment={};
+                      item.assignment.ordine=rOrd;
+                      hasConflict=false;
+                    }
+                  }
+                }
+                // Don't trigger conflict if remote only changed assignment.ordine
+                if(hasConflict){
+                  var remoteOrdine=remote.assignment&&remote.assignment.ordine;
+                  var localOrdine=item.assignment&&item.assignment.ordine;
+                  if(remoteOrdine!==localOrdine){
+                    // Clone and remove ordine to check if that's the only difference
+                    var rc=JSON.parse(JSON.stringify(remote)); var lc=JSON.parse(JSON.stringify(item));
+                    if(rc.assignment) delete rc.assignment.ordine;
+                    if(lc.assignment) delete lc.assignment.ordine;
+                    if(JSON.stringify(rc)===JSON.stringify(lc)) hasConflict=false;
+                  }
+                }
+                // Also merge ordine from remote if local didn't change it
+                if(remote.assignment&&remote.assignment.ordine!==undefined&&
+                   item.assignment&&item.assignment.ordine===undefined){
+                  item.assignment.ordine=remote.assignment.ordine;
+                }
                 if(hasConflict){
                   conflictItems.push({local:item, remote:remote, key:key});
                 }
