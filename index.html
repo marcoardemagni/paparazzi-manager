@@ -2124,7 +2124,7 @@ function openVistaPuntata(iso){
       h+=vpBumper('BUMPER — HOT STUFF');
     }
     if(t==='headlines'&&prevType!=='headlines') h+=vpBumper('BUMPER — HEADLINES');
-    if(t==='lancio-trending'){ h+=vpBumper('BUMPER — TRENDING ITALY'); prevType='lancio-trending'; return; }
+    if(t==='lancio-trending'){ h+=vpBumper('BUMPER — TRENDING ITALY'); prevType='lancio-trending'; }
     if(t==='domandone'&&s.title&&s.title.toLowerCase().indexOf('relaunch')!==-1) h+=vpBumper('BUMPER — DOMANDONE RELAUNCH');
     blockNum++;
     var typeLabel=TYPE_LABELS[t]||t;
@@ -3771,7 +3771,7 @@ function generaScalettaDocx(iso, soloDialogo){
         items.push('RVM'+(sec.rvm.notes?' '+sec.rvm.notes:'')+(sec.rvm.duration?' - '+sec.rvm.duration:''));
       }
       if(sec.rvms&&sec.rvms.length){
-        sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'&&r.status!=='standby'; }).forEach(function(r,i){
+        sec.rvms.filter(function(r){ return r.status&&r.status!=='non-serve'; }).forEach(function(r,i){
           items.push('RVM'+(sec.rvms.length>1?i+1:'')+(r.notes?' '+r.notes:'')+(r.duration?' - '+r.duration:''));
         });
       }
@@ -3815,7 +3815,7 @@ function generaScalettaDocx(iso, soloDialogo){
     if(tk==='domandone') return b+'\n\n\nGRAFICA DOMANDONE'+(sec?posProfNote(sec):'');
     if(tk==='domandone-relaunch') return b+'\n\n\nGRAFICA THE DOMANDONE'+(sec?posProfNote(sec):'');
     if(tk==='domandone-answer') return b+'\n\n\nGRAFICA DOMANDONE\n\n\n\n\n\n\n\n\n\nGRAFICA RISPOSTA'+(sec?posProfNote(sec):'');
-    if(tk==='temperature') return 'CAMERA TORINO\n\n\n\n\n\nFILIPPO SI ALZA'+(sec?posProfNote(sec):'');
+    if(tk==='temperature') return 'CAMERA TORINO\n\nFILIPPO SI ALZA'+(sec?posProfNote(sec):'');
     if(tk==='headlines') return b+'\n\nFILIPPO ALLO SPAZIO RASSEGNA\n\nFILIPPO TORNA AL TAVOLO'+(sec?posProfNote(sec):'');
     if(tk==='lancio-trending') return b+(sec?posProfNote(sec):'');
     if(tk==='poem') return b+'\n\n\nARDE VA AL LEGGIO\n\n\n\n\nRULLO'+(sec?posProfNote(sec):'');
@@ -3851,7 +3851,26 @@ function generaScalettaDocx(iso, soloDialogo){
   function mkPara(text,soundCol,highlight,underline){ var sz=soundCol?16:22; var runs=(text||'').split('\n').flatMap(function(line,i,arr){ var opts={text:line,bold:true,size:sz,font:'Arial'}; if(highlight) opts.highlight=highlight; if(underline) opts.underline={}; var r=[new d.TextRun(opts)]; if(i<arr.length-1) r.push(new d.TextRun({break:1})); return r; }); return new d.Paragraph({children:runs,spacing:{after:0,before:0}}); }
   function mkCell(paras,ci,shade){ return new d.TableCell({width:{size:COL[ci],type:d.WidthType.DXA},verticalAlign:d.VerticalAlign.TOP,shading:shade?{type:d.ShadingType.CLEAR,color:'auto',fill:'E8E8E8'}:undefined,children:paras}); }
   function bumperRow(label){ return new d.TableRow({children:[mkCell([mkPara('')],0),mkCell([mkPara('')],1),mkCell([mkPara(label,'',false,true)],2),mkCell([mkPara('')],3),mkCell([mkPara('')],4)]}); }
-  function dialogLines(text){ if(!text) return [mkPara('XXXX')]; var lines=text.split('\n\n').filter(function(l){return l.trim();}); var result=[]; lines.forEach(function(line,idx){ var colon=line.indexOf(':'); if(colon>0){ var who=line.slice(0,colon).trim(),what=line.slice(colon+1).trim(); result.push(new d.Paragraph({children:[new d.TextRun({text:who+': ',bold:true,size:22,font:'Arial'}),new d.TextRun({text:what,bold:true,size:22,font:'Arial'})],spacing:{after:0,before:0}})); } else { var isRvmP=line.trim().startsWith('>>>'); result.push(mkPara(line,'',isRvmP?'yellow':false)); } if(idx<lines.length-1) result.push(BLANK); }); return result; }
+  function dialogLines(text){
+    if(!text) return [mkPara('XXXX')];
+    // Normalize: ensure double newline before speaker labels
+    var normalized=text.replace(/\n(FILIPPO:|ARDE:|FILIPPO :|ARDE :)/g,'\n\n$1');
+    var lines=normalized.split('\n\n').filter(function(l){return l.trim();});
+    var result=[];
+    lines.forEach(function(line,idx){
+      line=line.trim();
+      var colon=line.indexOf(':');
+      if(colon>0){
+        var who=line.slice(0,colon).trim(),what=line.slice(colon+1).trim();
+        result.push(new d.Paragraph({children:[new d.TextRun({text:who+': ',bold:true,size:22,font:'Arial'}),new d.TextRun({text:what,bold:true,size:22,font:'Arial'})],spacing:{after:0,before:0}}));
+      } else {
+        var isRvmP=line.trim().startsWith('>>>');
+        result.push(mkPara(line,'',isRvmP?'yellow':false));
+      }
+      if(idx<lines.length-1) result.push(BLANK);
+    });
+    return result;
+  }
 
   var tCount=secs.filter(function(s){return s.type==='trending';}).length;
   var tIdx=0,cumTime=0,blockNum=0,rows=[];
