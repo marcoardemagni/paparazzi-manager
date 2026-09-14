@@ -1506,7 +1506,8 @@ function parseAggiornamenti(btn){
     +'- update_responsabile: value = person name\n'
     +'- update_duration: value = duration string like 1\'30\'\' (for RVM or copertura)\n'
     +'- update_tipo: value = trending|hotstuff|ospite\n'
-    +'- create: matchedTitle = actual event name\n\n'
+    +'- create: matchedTitle = actual event name\n'
+    +'- create_cal_event: create a calendar event. value = JSON {title,dateStart,dateEnd,luogo,categoria}\n\n'
     +'Return: [{"matchedTitle":"...","action":"...","value":"...","originalText":"...","confidence":"high|medium|low"}]';
 
   var userPrompt='Sections list:\n'+secList+'\n\nUpdates:\n'+input;
@@ -1550,7 +1551,7 @@ function parseAggiornamenti(btn){
               'update_duration':'⏱ Durata → '+u.value,
               'update_responsabile':'👤 Responsabile → '+u.value,
               'update_tipo':'Tipo → '+u.value,
-              'create':'Crea nuova sezione'
+              'create_cal_event':'📅 Crea evento in calendario',
             }[u.action]||u.action;
             return '<div style="background:var(--bg3);border-radius:5px;padding:0.5rem 0.6rem;font-size:0.8rem;border-left:3px solid '+confColor+'">'
               +'<div style="font-weight:600;margin-bottom:2px">'+esc(u.matchedTitle||'—')+(secFound?' <span style="color:#4ade80;font-size:0.65rem">✓ trovata</span>':'<span style="color:#f87171;font-size:0.65rem"> ✗ non trovata</span>')+'</div>'
@@ -1580,6 +1581,24 @@ function confermaAggiornamenti(btn){
       markModified(ns.id);
       S.sections.push(ns);
       created++;
+      return;
+    }
+    if(u.action==='create_cal_event'){
+      try{
+        var evData=typeof u.value==='string'?JSON.parse(u.value):u.value;
+        var calEv=mkCalEvent();
+        calEv.title=(evData.title||u.matchedTitle||'Nuovo evento').trim();
+        calEv.dateStart=evData.dateStart||'';
+        calEv.dateEnd=evData.dateEnd||evData.dateStart||'';
+        calEv.luogo=evData.luogo||'';
+        calEv.categoria=evData.categoria||'Altro';
+        calEv.rilevanza=9;
+        calEv.updatedAt=Date.now();
+        if(!S.calEvents) S.calEvents=[];
+        S.calEvents.push(calEv);
+        markModified(calEv.id);
+        created++;
+      } catch(e){ console.error('create_cal_event parse error', e); }
       return;
     }
     if(!sec) return;
@@ -1968,9 +1987,8 @@ function sortSezioniPuntata(secs){
   return secs.slice().sort(function(a,b){
     var oa=getTipoOrdine(a), ob=getTipoOrdine(b);
     if(oa!==ob) return oa-ob;
-    // Same type: sort by ordine field (explicit), then blocco for backward compat
-    var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:(a.assignment&&a.assignment.blocco||0);
-    var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:(b.assignment&&b.assignment.blocco||0);
+    var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:(a.assignment&&a.assignment.blocco!=null?a.assignment.blocco:9999);
+    var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:(b.assignment&&b.assignment.blocco!=null?b.assignment.blocco:9999);
     return ra-rb;
   });
 }
@@ -2051,7 +2069,7 @@ function openVistaPuntata(iso){
   // Store current iso and wire export button
   window._vpCurrentIso=iso;
   var expBtn=document.getElementById('vpExportBtn');
-  if(expBtn) expBtn.onclick=function(){ generaScalettaDocx(iso); };
+  if(expBtn) expBtn.onclick=function(){ scegliFormatoScaletta(iso); };
 }
 function vpAddSezione(iso, tipo){
   var sec=mkSection();
@@ -3535,7 +3553,20 @@ function numberToWord(n){
   return (n>=0&&n<words.length)?words[n]:String(n);
 }
 
-function generaScalettaDocx(iso){
+function scegliFormatoScaletta(iso){
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML='<div style="background:var(--bg2);border-radius:10px;padding:1.2rem;width:300px;text-align:center">'
+    +'<div style="font-weight:700;margin-bottom:1rem">📄 Esporta scaletta</div>'
+    +'<div style="display:flex;flex-direction:column;gap:0.5rem">'
+    +'<button class="btn btn-primary" onclick="this.closest(\'div[style*=fixed]\').remove();generaScalettaDocx(\''+iso+'\',false)">📄 Scaletta completa (5 colonne)</button>'
+    +'<button class="btn" onclick="this.closest(\'div[style*=fixed]\').remove();generaScalettaDocx(\''+iso+'\',true)">📝 Solo dialogo (colonna 3)</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+}
+
+function generaScalettaDocx(iso, soloDialogo){
   var d=window.docx||window.Document&&{Document:window.Document,Packer:window.Packer,Table:window.Table,TableRow:window.TableRow,TableCell:window.TableCell,Paragraph:window.Paragraph,TextRun:window.TextRun,WidthType:window.WidthType,AlignmentType:window.AlignmentType,VerticalAlign:window.VerticalAlign,ShadingType:window.ShadingType};
   if(!d||!d.Packer){ alert('Libreria docx non caricata. Ricarica la pagina.'); return; }
   var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso; });
@@ -3547,6 +3578,33 @@ function generaScalettaDocx(iso){
   var dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   var monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var dayStr=dayNames[dt.getDay()]+' '+dt.getDate()+' '+monthNames[dt.getMonth()]+' '+dt.getFullYear();
+
+  // SOLO DIALOGO: generate simple single-column doc
+  if(soloDialogo){
+    var children=[];
+    children.push(new d.Paragraph({children:[new d.TextRun({text:'PT. '+epNum+' – '+dayStr.toUpperCase()+' – SOLO DIALOGO',bold:true,font:'Arial',size:24})],spacing:{after:300}}));
+    secs.forEach(function(s){
+      var tk=getTk(s);
+      if(tk==='header') return;
+      // Section title
+      children.push(new d.Paragraph({children:[new d.TextRun({text:(TYPE_LABELS[tk]||tk).toUpperCase()+': '+(s.title||''),bold:true,font:'Arial',size:22})],spacing:{before:300,after:100}}));
+      // Dialogue content
+      var dialogo='';
+      if(tk==='bandierina') dialogo=(s.script.bandierina&&s.script.bandierina.dialogo)||'';
+      else if(tk==='poem') dialogo=(s.script.poem&&s.script.poem.testo)||'';
+      else if(tk==='temperature') dialogo=(s.script.temperature&&s.script.temperature.dialogo)||'';
+      else dialogo=s.script.dialogo||'';
+      if(dialogo){
+        dialogo.split('\n').forEach(function(line){
+          children.push(new d.Paragraph({children:[new d.TextRun({text:line||' ',font:'Arial',size:20})],spacing:{after:60}}));
+        });
+      }
+    });
+    var doc=new d.Document({sections:[{properties:{page:{margin:{top:700,bottom:700,left:800,right:800}}},children:children}]});
+    var fname='dialogo-pt'+epNum+'-'+iso+'.docx';
+    d.Packer.toBlob(doc).then(function(blob){ var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname; a.click(); });
+    return;
+  }
 
   var DEFAULT_DURATION={sigla:15,welcome:120,bandierina:150,domandone:60,temperature:60,headlines:570,'lancio-trending':30,trending:180,hotstuff:240,ospite:600,'domandone-relaunch':60,'domandone-answer':90,poem:120,saluti:60};
 
@@ -5620,11 +5678,19 @@ function collectForm(){
   sec.info=document.getElementById('f-info').value;
   var ad=document.getElementById('f-assign-date').value;
   var ab=document.getElementById('f-assign-blocco').value;
-  if(ad&&ab){ 
+  if(ad){
     if(!sec.assignment) sec.assignment={};
-    // Only update from assegnazione panel if plan assignment block didn't already update it
     sec.assignment.date=ad;
-    sec.assignment.blocco=parseInt(ab);
+    if(ab){
+      sec.assignment.blocco=parseInt(ab);
+    } else if(!sec.assignment.blocco){
+      // Auto-assign: last blocco of same date + 1
+      var siblings=S.sections.filter(function(s){ return s.id!==sec.id&&s.assignment&&s.assignment.date===ad; });
+      var maxBl=siblings.reduce(function(m,s){ return Math.max(m,s.assignment.blocco||0); },0);
+      sec.assignment.blocco=maxBl+1;
+    }
+  } else if(ad===''&&document.getElementById('f-assign-date')){
+    sec.assignment=null;
   }
   // note: foto/coperture descs updated live
   var secToMark=S.sections.find(function(s){ return s.id===editingId; });
