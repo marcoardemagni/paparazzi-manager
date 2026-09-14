@@ -1479,7 +1479,17 @@ function parseAggiornamenti(btn){
   var input=document.getElementById('aggtext-input').value.trim();
   if(!input){ alert('Inserisci la lista.'); btn.disabled=false; btn._running=false; return; }
   var st=document.getElementById('aggtext-status');
-  if(st) st.textContent='Interpreto…';
+
+  // Check if any line ends with ? — treat as query
+  var lines=input.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var queryLines=lines.filter(function(l){return l.endsWith('?');});
+  var updateLines=lines.filter(function(l){return !l.endsWith('?');});
+
+  if(queryLines.length>0){
+    if(st) st.textContent='Elaboro le query…';
+    eseguiQuery(queryLines, updateLines, btn);
+    return;
+  }
 
   // Only pass sections with custom titles (not standard template titles)
   var STANDARD_TITLES=['SIGLA','WELCOME','HEADLINES','LANCIO TRENDING','TEMPERATURE','METEO',
@@ -1651,6 +1661,64 @@ function confermaAggiornamenti(btn){
   save(); render();
   btn.closest('div[style*="fixed"]').remove();
   alert('✓ Applicate '+applied+' modifiche'+(created?' + '+created+' sezioni create':'')+'.');
+}
+
+function eseguiQuery(queryLines, updateLines, btn){
+  var st=document.getElementById('aggtext-status');
+  var today=new Date().toISOString().slice(0,10);
+
+  // Build data context for Claude
+  var MONTHS_IT=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  var DAYS_IT=['dom','lun','mar','mer','gio','ven','sab'];
+
+  function fmtDate(iso){
+    if(!iso) return '';
+    var d=new Date(iso+'T12:00:00');
+    return DAYS_IT[d.getDay()]+' '+d.getDate()+' '+MONTHS_IT[d.getMonth()];
+  }
+
+  // Build relevant data summaries
+  var ospitiFuturi=S.sections.filter(function(s){
+    return s.type==='ospite'&&s.assignment&&s.assignment.date>=today;
+  }).sort(function(a,b){ return a.assignment.date>b.assignment.date?1:-1; })
+  .map(function(s){
+    var oRef=(s.script&&s.script.ospiteRef)||{};
+    var nome=oRef.nome||s.title||'—';
+    return fmtDate(s.assignment.date)+': '+nome+(oRef.sottopancia?' ('+oRef.sottopancia+')':'');
+  });
+
+  var sezioniNonFattibili=S.sections.filter(function(s){
+    return s.title&&s.prodStatus&&s.prodStatus.fattibilita===3;
+  }).map(function(s){ return (s.nickname||s.title)+(s.assignment&&s.assignment.date?' ['+fmtDate(s.assignment.date)+']':''); });
+
+  var rvmInAttesa=S.sections.filter(function(s){
+    return s.title&&s.rvms&&s.rvms.some(function(r){ return r.status==='richiesto'; });
+  }).map(function(s){ return (s.nickname||s.title)+(s.prodStatus&&s.prodStatus.dataRicezione?' → '+s.prodStatus.dataRicezione:''); });
+
+  var context='Today: '+today+'\n\n'
+    +'OSPITI FUTURI:\n'+(ospitiFuturi.length?ospitiFuturi.join('\n'):'nessuno')+'\n\n'
+    +'SEZIONI NON FATTIBILI:\n'+(sezioniNonFattibili.length?sezioniNonFattibili.join('\n'):'nessuna')+'\n\n'
+    +'RVM IN ATTESA:\n'+(rvmInAttesa.length?rvmInAttesa.join('\n'):'nessuno');
+
+  callClaude({
+    model:'claude-sonnet-4-6',
+    max_tokens:1000,
+    system:'You are an assistant for an Italian TV show production. Answer queries about the show\'s data in Italian, concisely and clearly. Use the provided data context to answer.',
+    messages:[{role:'user',content:'Data context:\n'+context+'\n\nQueries:\n'+queryLines.join('\n')}]
+  }).then(function(data){
+    var txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    var prev=document.getElementById('aggtext-preview');
+    if(prev){
+      prev.style.display='block';
+      prev.innerHTML='<div style="font-family:var(--mono);font-size:0.65rem;color:var(--text3);margin-bottom:0.4rem">RISPOSTA QUERY</div>'
+        +'<div style="font-size:0.82rem;line-height:1.5;white-space:pre-wrap">'+esc(txt)+'</div>';
+    }
+    if(st) st.textContent=updateLines.length?'Ora puoi aggiungere aggiornamenti normali se vuoi.':'';
+    btn.disabled=false; btn._running=false;
+  }).catch(function(){
+    if(st) st.textContent='Errore di rete.';
+    btn.disabled=false; btn._running=false;
+  });
 }
 
 function setSezFilter(val){
