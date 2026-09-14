@@ -515,7 +515,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 
 <!-- ══ HEADER ══ -->
 <header class="hdr">
-  <div class="logo">📸 <em>PAPARAZZI!</em> MGR</div>
+  <div class="logo">📸 <em>PAPARAZZI!</em> MGR <span id="hdr-version" style="font-size:0.55rem;opacity:0.5;font-family:var(--mono);font-weight:400;vertical-align:middle"></span></div>
   <div class="hdr-tabs">
     <button class="htab" id="tabCalendario" onclick="showView('calendario')">Calendario</button>
     <button class="htab" id="tabOspiti" onclick="showView('ospiti')">Ospiti</button>
@@ -973,8 +973,12 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v15.1 – 2026-08-27';
+var APP_VERSION='v16.0 – 2026-09-14';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
+document.addEventListener('DOMContentLoaded', function(){
+  var el=document.getElementById('hdr-version');
+  if(el) el.textContent=APP_VERSION;
+});
 
 function save(){
   _lastSaveTime=Date.now();
