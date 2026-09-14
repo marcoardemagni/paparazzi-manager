@@ -3822,12 +3822,14 @@ function generaScalettaDocx(iso, soloDialogo){
     if(tk==='saluti') return ''+(sec?posProfNote(sec):'');
 
     if(tk==='ospite'&&sec){
+      var studioVal=sec.ospiteStudio||'In studio';
+      var isRemoto=studioVal.indexOf('Remoto')!==-1||studioVal.indexOf('Teams')!==-1;
+      var locationLabel=isRemoto?'COLLEGAMENTO':'STUDIO';
       var pp=posProfNote(sec);
       var media=buildMedia(sec);
-      var parts=[b];
+      var parts=[b,'',locationLabel];
       if(pp) parts.push('', pp, '');
       if(media) parts.push('', media);
-      else if(!pp) parts.push('', 'FOTO/VIDEO');
       return parts.join('\n');
     }
 
@@ -4028,7 +4030,9 @@ function generaScalettaDocx(iso, soloDialogo){
       var nome=oR.nome||(s.title&&s.title!=='Ospite'?s.title:'');
       if(nome){
         var isTalent=TALENTS.some(function(t){ return t.toLowerCase()===nome.toLowerCase(); });
-        var label=nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' (STUDIO)';
+        var stVal=s.ospiteStudio||'In studio';
+        var locLabel=(stVal.indexOf('Remoto')!==-1||stVal.indexOf('Teams')!==-1)?'COLLEGAMENTO':'STUDIO';
+        var label=nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' ('+locLabel+')';
         if(isTalent) sonoIntervenuti.push(label);
         else hannoPartecipato.push(label);
       }
