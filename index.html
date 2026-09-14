@@ -8186,6 +8186,7 @@ function bootApp(){
     setInterval(function(){
       var panelOpen = editingId || (document.getElementById('overlay').classList.contains('open'));
       if(!panelOpen) cloudLoad(true);
+      if(currentView==='deliverable') renderDeliverables();
     }, 30000);
   } else {
     render();
