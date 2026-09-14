@@ -3823,8 +3823,9 @@ function generaScalettaDocx(iso, soloDialogo){
 
     if(tk==='ospite'&&sec){
       var studioVal=sec.ospiteStudio||'In studio';
-      var isRemoto=studioVal.indexOf('Remoto')!==-1||studioVal.indexOf('Teams')!==-1;
+      var isRemoto=studioVal.indexOf('Remoto')!==-1||studioVal.indexOf('Teams')!==-1||studioVal==='Altro';
       var locationLabel=isRemoto?'COLLEGAMENTO':'STUDIO';
+      if(isRemoto&&sec.ospiteDaDove) locationLabel+=' DA '+sec.ospiteDaDove.toUpperCase();
       var pp=posProfNote(sec);
       var media=buildMedia(sec);
       var parts=[b,'',locationLabel];
@@ -4031,7 +4032,8 @@ function generaScalettaDocx(iso, soloDialogo){
       if(nome){
         var isTalent=TALENTS.some(function(t){ return t.toLowerCase()===nome.toLowerCase(); });
         var stVal=s.ospiteStudio||'In studio';
-        var locLabel=(stVal.indexOf('Remoto')!==-1||stVal.indexOf('Teams')!==-1)?'COLLEGAMENTO':'STUDIO';
+        var locLabel=(stVal.indexOf('Remoto')!==-1||stVal.indexOf('Teams')!==-1||stVal==='Altro')?'COLLEGAMENTO':'STUDIO';
+        if(locLabel==='COLLEGAMENTO'&&s.ospiteDaDove) locLabel+=' DA '+s.ospiteDaDove.toUpperCase();
         var label=nome+(oR.sottopancia?' ('+oR.sottopancia+')':'')+' ('+locLabel+')';
         if(isTalent) sonoIntervenuti.push(label);
         else hannoPartecipato.push(label);
@@ -5063,11 +5065,16 @@ function renderPanelBody(sec){
       h+=sdiv('Ospite');
       var studioOpts=['In studio','In studio, musicale','Remoto, Teams','Altro'];
       var studioVal=sec.ospiteStudio||'In studio';
+      var isRemotoVal=studioVal.indexOf('Remoto')!==-1||studioVal.indexOf('Altro')!==-1;
       h+='<div class="rvm-block">'
         +'<div class="flbl" style="margin-bottom:6px">In studio?</div>'
         +'<select class="fselect" id="f-ospite-studio" onchange="updateOspiteStudio(this.value)">'
         +studioOpts.map(function(o){ return '<option value="'+o+'"'+(studioVal===o?' selected':'')+'>'+o+'</option>'; }).join('')
         +'</select>'
+        +'<div id="ospite-dadove-block" style="'+(isRemotoVal?'':'display:none')+';margin-top:0.6rem">'
+        +'<div class="flbl">Da dove</div>'
+        +'<input class="finput" id="f-ospite-dadove" placeholder="es. Bormio, Milano, Londra…" value="'+esc(sec.ospiteDaDove||'')+'">'
+        +'</div>'
         +'<div id="ospite-musicale-block" style="'+(studioVal==='In studio, musicale'?'':'display:none')+';margin-top:0.6rem">'
         +'<div class="flbl">Istruzioni per strumenti musicali</div>'
         +'<textarea class="ftextarea" id="f-ospite-musicale" placeholder="Istruzioni\u2026">'+esc(sec.ospiteMusicale||'')+'</textarea>'
@@ -5495,6 +5502,8 @@ function removeEsibizione(i){
 function updateOspiteStudio(v){
   var el=document.getElementById('ospite-musicale-block');
   if(el) el.style.display=(v==='In studio, musicale'?'':'none');
+  var dd=document.getElementById('ospite-dadove-block');
+  if(dd) dd.style.display=(v.indexOf('Remoto')!==-1||v==='Altro'?'':'none');
 }
 function toggleBandierinaMappa(v){
   var el=document.getElementById('bf-mappa-details');
@@ -5774,6 +5783,7 @@ function collectForm(){
       // Update section title from nome
       if(oRef.nome&&(!sec.title||sec.title==='Ospite')) sec.title=oRef.nome;
       var oSt=document.getElementById('f-ospite-studio'); if(oSt) sec.ospiteStudio=oSt.value;
+      var oDd=document.getElementById('f-ospite-dadove'); if(oDd) sec.ospiteDaDove=oDd.value.trim();
       var oMu=document.getElementById('f-ospite-musicale'); if(oMu) sec.ospiteMusicale=oMu.value;
       var oFi=document.getElementById('f-pos-filippo'); if(oFi) sec.posFilippo=oFi.value;
       var esibEn=document.getElementById('f-esib-enabled');
