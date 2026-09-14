@@ -522,7 +522,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <button class="htab" id="tabEpisodi" onclick="showView('episodi')">Puntate</button>
     <button class="htab" id="tabLavorazione" onclick="showView('lavorazione')">In lavorazione</button>
     <button class="htab" id="tabSezioni" onclick="showView('sezioni')">Sezioni</button>
-    <button class="htab" id="tabGiorno" onclick="showView('giorno')">Giornaliera</button>
+    <button class="htab" id="tabGiorno" onclick="showView('giorno')" style="display:none">Giornaliera</button>
     <button class="htab" id="tabDeliverable" onclick="showView('deliverable')">Deliverables</button>
   </div>
   <div class="hdr-right">
@@ -689,8 +689,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <div style="flex:1;min-width:0">
           <div class="vp-title" id="vpTitle">—</div>
           <div class="vp-subtitle" id="vpSubtitle"></div>
+          <div id="vpOrderStamp" style="display:none;font-family:var(--mono);font-size:0.6rem;color:var(--text3);margin-top:2px"></div>
         </div>
         <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0">
+          <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="exportGiornalieroRVM()">📋 Foto+RVM+Props</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" id="vpExportBtn">&#x1F4C4; Esporta scaletta</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;background:#8b1a1a;color:#fff;border-color:#c0392b" onclick="deletePuntata()" title="Elimina tutti i blocchi di questa puntata">🗑 Elimina puntata</button>
           <button class="vp-close" onclick="closeVistaPuntata()">✕</button>
@@ -2065,6 +2067,20 @@ function openVistaPuntata(iso){
     +'<button class="btn" style="font-size:0.75rem;padding:0.25rem 0.8rem" data-iso="'+iso+'" onclick="vpAddSezione(this.dataset.iso,\'ospite\')" >+ Ospite</button>'
     +'</div>';
   document.getElementById('vpBody').innerHTML=h;
+  // Order timestamp
+  var vpOrderEl=document.getElementById('vpOrderStamp');
+  if(vpOrderEl){
+    var hdrSec=secs.find(function(s){ return s.type==='header'; });
+    if(hdrSec&&hdrSec._orderLastSavedBy){
+      var ots=hdrSec._orderLastSavedAt?new Date(hdrSec._orderLastSavedAt):null;
+      var otsStr=ots?(ots.getDate()+'/'+(ots.getMonth()+1)+' '+String(ots.getHours()).padStart(2,'0')+':'+String(ots.getMinutes()).padStart(2,'0')):'';
+      vpOrderEl.textContent='Ordine: '+hdrSec._orderLastSavedBy+(otsStr?' · '+otsStr:'');
+      vpOrderEl.style.display='';
+    } else {
+      vpOrderEl.style.display='none';
+    }
+  }
+
   document.getElementById('vpOverlay').classList.add('open');
   // Store current iso and wire export button
   window._vpCurrentIso=iso;
@@ -2107,7 +2123,7 @@ function vpMoveUp(secId, iso, tipo){
   b.assignment.ordine=tmp;
   markModified(a.id); markModified(b.id);
   _stampOrderChange(iso);
-  save(); openVistaPuntata(iso);
+  save(); cloudSave(); openVistaPuntata(iso);
 }
 
 function vpMoveDown(secId, iso, tipo){
@@ -2121,7 +2137,7 @@ function vpMoveDown(secId, iso, tipo){
   b.assignment.ordine=tmp;
   markModified(a.id); markModified(b.id);
   _stampOrderChange(iso);
-  save(); openVistaPuntata(iso);
+  save(); cloudSave(); openVistaPuntata(iso);
 }
 
 function _stampOrderChange(iso){
@@ -4240,8 +4256,12 @@ function exportDomandoneSettimanale(){
    EXPORT FOTO+RVM+PROPS (giornaliero)
 ═══════════════════════════════════ */
 function exportGiornalieroRVM(){
-  // Ask which day — use current week's first day with sections
-  var dates=weekDates(epWeek);
+  // Use current vista puntata date if available, otherwise show day picker
+  var vpIso=window._vpCurrentIso;
+  if(vpIso){
+    doExportGiornaliero(vpIso);
+    return;
+  }
   if(!dates||!dates.length){ alert('Nessuna settimana visualizzata.'); return; }
 
   var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
