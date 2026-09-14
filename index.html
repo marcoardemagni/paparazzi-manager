@@ -5628,7 +5628,12 @@ function collectForm(){
   }
   // note: foto/coperture descs updated live
   var secToMark=S.sections.find(function(s){ return s.id===editingId; });
-  if(secToMark){ secToMark.updatedAt=Date.now(); markModified(secToMark.id); }
+  if(secToMark){
+    secToMark.updatedAt=Date.now();
+    secToMark._lastSavedBy=CURRENT_USER||'—';
+    secToMark._lastSavedAt=new Date().toISOString();
+    markModified(secToMark.id);
+  }
   save();
 }
 
@@ -7174,6 +7179,8 @@ function showOspiteModal(g, isNew){
     }
     if(isNew){ getOspiti().push(g); }
     g.updatedAt=Date.now();
+    g._lastSavedBy=CURRENT_USER||'—';
+    g._lastSavedAt=new Date().toISOString();
     markModified(g.id);
     save(); document.body.removeChild(overlay); renderOspiti();
   };
