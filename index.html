@@ -4490,19 +4490,19 @@ function openSection(id){
 function renderPanelBody(sec){
   let h='';
   if(!sec.prodStatus) sec.prodStatus={fattibilita:0,dataRicezione:'',grezzoRicevuto:false,inMontaggio:false,pronto:false};
-  // Migrate old fattibile boolean to new fattibilita scale
-  if(sec.prodStatus.fattibile!==undefined&&sec.prodStatus.fattibilita===undefined){
-    sec.prodStatus.fattibilita=sec.prodStatus.fattibile?4:0;
+  // Migrate old fattibile boolean to new fattibilita scale - only in memory, not saved
+  var ps=Object.assign({},sec.prodStatus);
+  if(ps.fattibile!==undefined&&ps.fattibilita===undefined){
+    ps.fattibilita=ps.fattibile?4:0;
   }
-  var ps=sec.prodStatus;
-  if(!sec.nickname) sec.nickname=autoNickname(sec.title, sec.id);
+  var displayNickname=sec.nickname||autoNickname(sec.title, sec.id);
 
   // NICKNAME + PROD STATUS BAR
   h+='<div style="background:var(--bg3);border-radius:6px;padding:0.5rem 0.7rem;margin-bottom:0.8rem">'
     // Nickname row
     +'<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">'
     +'<div style="font-family:var(--mono);font-size:0.65rem;font-weight:700;color:var(--text3);flex-shrink:0">NICKNAME</div>'
-    +'<input class="finput" id="f-nickname" value="'+esc(sec.nickname||'')+'" placeholder="'+esc(autoNickname(sec.title,sec.id)||'es. Klee')+'" style="flex:1;font-size:0.8rem;padding:0.15rem 0.4rem;font-family:var(--mono);font-weight:700;color:var(--acc)" oninput="checkNicknameDup(this,\''+sec.id+'\')">'
+    +'<input class="finput" id="f-nickname" value="'+esc(displayNickname)+'" placeholder="'+esc(autoNickname(sec.title,sec.id)||'es. Klee')+'" style="flex:1;font-size:0.8rem;padding:0.15rem 0.4rem;font-family:var(--mono);font-weight:700;color:var(--acc)" oninput="checkNicknameDup(this,\''+sec.id+'\')">'
     +'<span id="nick-dup-warn" style="font-size:0.68rem;color:#f87171;display:none">⚠ già usato</span>'
     +'</div>'
     // Fattibilita pipeline
