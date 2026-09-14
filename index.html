@@ -2050,7 +2050,7 @@ function _createEpisode(date, epNum){
     s.script['lancio-trending']={p:'6',time:'',testo1:'TRENDING ITALY\nWhat is trending today in Italy\nFilippo: Trending n°',numero:'4',grafica:'GRAFICA: WALL\nTORINO\nGRAFICA:',sound:'RAICOM 1'};
   });
   mk('trending','Trending','', 7, function(s){
-    s.rvms=[{status:'richiesto',duration:'',preText:'',notes:'',postText:''}];
+    s.rvms=[];
     s.posProf='desk';
   });
   mk('poem','Poem','', 16);
@@ -4905,7 +4905,7 @@ function renderPanelBody(sec){
 
   // RVM
   if(sec.type==='trending'||sec.type==='hotstuff'||sec.type==='ospite'){
-    if(!sec.rvms||!sec.rvms.length) sec.rvms=[{status:'richiesto',duration:'',preText:'',notes:'',postText:''}];
+    if(!sec.rvms) sec.rvms=[];
 
     // Pianificazione block (trending + hotstuff only)
     if(sec.type==='trending'||sec.type==='hotstuff'){
@@ -5103,31 +5103,8 @@ function renderPanelBody(sec){
         +'</div>';
     }
   } else {
-    h+=sdiv('RVM');
-    h+=`<div class="rvm-block">
-    <div class="rvm-toggle-row">
-      <label><input type="checkbox" id="f-rvm-needed" ${sec.rvm.needed?'checked':''} onchange="toggleRvm(this.checked)"> RVM richiesto per questa sezione</label>
-    </div>
-    <div id="rvm-details" style="${sec.rvm.needed?'':'display:none'}">
-      <div class="rvm-details">
-        <div class="flbl">Stato</div>
-        ${pipeBar('f-rvm-st', sec.rvm.status||'richiesto')}
-        <div class="frow-2" style="margin-top:0.6rem">
-          <div>
-            <div class="flbl">Durata</div>
-            <input class="finput" id="f-rvm-dur" value="${esc(sec.rvm.duration)}" placeholder="es. 1'45''">
-          </div>
-          <div>
-            <div class="flbl" style="opacity:0">·</div>
-          </div>
-        </div>
-        <div class="flbl">Titolo RVM <span style="font-weight:400;color:var(--text3)">(colonna 4 scaletta)</span></div>
-        <textarea class="ftextarea" id="f-rvm-notes" placeholder="es. RVM FABRIZI">${esc(sec.rvm.notes)}</textarea>
-        <div class="flbl" style="margin-top:0.3rem">Informazioni RVM <span style="font-weight:400;color:var(--text3)">(non in scaletta)</span></div>
-        <textarea class="ftextarea" id="f-rvm-info" placeholder="Dettagli, contatti, note di produzione…">${esc(sec.rvm.info||'')}</textarea>
-      </div>
-    </div>
-  </div>`;
+    // Legacy sec.rvm block - hidden, use rvms array instead
+    // (kept for data compatibility but not shown in UI)
   }
   } // end else (generic RVM)
   } // end if !headlines
@@ -5151,10 +5128,7 @@ function renderPanelBody(sec){
         +'<div class="flbl" style="margin-bottom:4px">Stato</div>'
         +pipeBar('f-cop-st-'+i, c.status||'richiesto', 'copertura', i, ['richiesto','girato','montato','descritto'], {richiesto:'Richiesto',girato:'Girato',montato:'Montato',descritto:'Descritto'})
         +'<div style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;margin-top:0.5rem;align-items:start">'
-        +'<div><div class="flbl">Titolo RVM <span style="font-weight:400;color:var(--text3)">(colonna 4 scaletta)</span></div>'
-        +'<input class="finput" id="f-rvm-notes-'+i+'" value="'+esc(r.notes||'')+'" placeholder="es. RVM FABRIZI" style="margin-bottom:0.3rem">'
-        +'<div class="flbl">Informazioni RVM <span style="font-weight:400;color:var(--text3)">(non in scaletta)</span></div>'
-        +'<textarea class="ftextarea" id="f-rvm-info-'+i+'" placeholder="Dettagli, contatti, note di produzione…" style="min-height:38px">'+esc(r.info||'')+'</textarea></div>'
+        +'<div><div class="flbl">Descrizione contenuto</div>'
         +'<textarea class="ftextarea" id="f-cop-notes-'+i+'" placeholder="Descrivi la copertura\u2026" style="min-height:38px">'+esc(c.notes||'')+'</textarea></div>'
         +'<div><div class="flbl">Durata</div>'
         +'<input class="finput" id="f-cop-dur-'+i+'" value="'+esc(c.duration||'')+'" placeholder="1\'30\'\'" style="width:80px"></div>'
