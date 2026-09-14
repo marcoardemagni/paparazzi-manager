@@ -5121,10 +5121,8 @@ function renderPanelBody(sec){
             <div class="flbl" style="opacity:0">·</div>
           </div>
         </div>
-        <div class="flbl">Titolo RVM <span style="font-weight:400;color:var(--text3)">(colonna 4 scaletta)</span></div>
-        <textarea class="ftextarea" id="f-rvm-notes" placeholder="es. RVM FABRIZI">${esc(sec.rvm.notes)}</textarea>
-        <div class="flbl" style="margin-top:0.3rem">Informazioni RVM <span style="font-weight:400;color:var(--text3)">(non in scaletta)</span></div>
-        <textarea class="ftextarea" id="f-rvm-info" placeholder="Dettagli, contatti, note di produzione…">${esc(sec.rvm.info||'')}</textarea>
+        <div class="flbl">Descrizione contenuto</div>
+        <textarea class="ftextarea" id="f-rvm-notes" placeholder="Descrivi il contenuto del RVM…">${esc(sec.rvm.notes)}</textarea>
       </div>
     </div>
   </div>`;
@@ -5151,10 +5149,7 @@ function renderPanelBody(sec){
         +'<div class="flbl" style="margin-bottom:4px">Stato</div>'
         +pipeBar('f-cop-st-'+i, c.status||'richiesto', 'copertura', i, ['richiesto','girato','montato','descritto'], {richiesto:'Richiesto',girato:'Girato',montato:'Montato',descritto:'Descritto'})
         +'<div style="display:grid;grid-template-columns:1fr auto;gap:0.4rem;margin-top:0.5rem;align-items:start">'
-        +'<div><div class="flbl">Titolo RVM <span style="font-weight:400;color:var(--text3)">(colonna 4 scaletta)</span></div>'
-        +'<input class="finput" id="f-rvm-notes-'+i+'" value="'+esc(r.notes||'')+'" placeholder="es. RVM FABRIZI" style="margin-bottom:0.3rem">'
-        +'<div class="flbl">Informazioni RVM <span style="font-weight:400;color:var(--text3)">(non in scaletta)</span></div>'
-        +'<textarea class="ftextarea" id="f-rvm-info-'+i+'" placeholder="Dettagli, contatti, note di produzione…" style="min-height:38px">'+esc(r.info||'')+'</textarea></div>'
+        +'<div><div class="flbl">Descrizione contenuto</div>'
         +'<textarea class="ftextarea" id="f-cop-notes-'+i+'" placeholder="Descrivi la copertura\u2026" style="min-height:38px">'+esc(c.notes||'')+'</textarea></div>'
         +'<div><div class="flbl">Durata</div>'
         +'<input class="finput" id="f-cop-dur-'+i+'" value="'+esc(c.duration||'')+'" placeholder="1\'30\'\'" style="width:80px"></div>'
@@ -5375,10 +5370,8 @@ function renderRvmBlock(r, i, total){
     +'<textarea class="ftextarea" id="f-rvm-pre-'+i+'" placeholder="Testo prima del RVM\u2026" style="min-height:38px">'+esc(r.preText||'')+'</textarea>'
     +'<div class="flbl" style="margin-top:0.5rem">Durata</div>'
     +'<input class="finput" id="f-rvm-dur-'+i+'" value="'+esc(r.duration||'')+'" placeholder="es. 1\'45\'\'">'
-    +'<div class="flbl" style="margin-top:0.5rem">Titolo RVM <span style="font-weight:400;color:var(--text3)">(colonna 4 scaletta)</span></div>'
-    +'<input class="finput" id="f-rvm-notes-'+i+'" value="'+esc(r.notes||'')+'" placeholder="es. RVM FABRIZI" style="margin-bottom:0.3rem">'
-    +'<div class="flbl">Informazioni RVM <span style="font-weight:400;color:var(--text3)">(non in scaletta)</span></div>'
-    +'<textarea class="ftextarea" id="f-rvm-info-'+i+'" placeholder="Dettagli, contatti…" style="min-height:38px">'+esc(r.info||'')+'</textarea>'
+    +'<div class="flbl" style="margin-top:0.5rem">Descrizione contenuto</div>'
+    +'<textarea class="ftextarea" id="f-rvm-notes-'+i+'" placeholder="Descrivi il contenuto del RVM\u2026" style="min-height:38px">'+esc(r.notes||'')+'</textarea>'
     +'<div class="flbl" style="margin-top:0.5rem">Testo post RVM</div>'
     +'<textarea class="ftextarea" id="f-rvm-post-'+i+'" placeholder="Testo dopo il RVM\u2026" style="min-height:38px">'+esc(r.postText||'')+'</textarea>'
     +'</div>';
@@ -5429,7 +5422,6 @@ function collectRvms(sec){
     el=document.getElementById('f-rvm-pre-'+i);   if(el) sec.rvms[i].preText=el.value;
     el=document.getElementById('f-rvm-dur-'+i);   if(el) sec.rvms[i].duration=el.value;
     el=document.getElementById('f-rvm-notes-'+i); if(el) sec.rvms[i].notes=el.value;
-    el=document.getElementById('f-rvm-info-'+i);  if(el) sec.rvms[i].info=el.value;
     el=document.getElementById('f-rvm-post-'+i);  if(el) sec.rvms[i].postText=el.value;
   }
 }
