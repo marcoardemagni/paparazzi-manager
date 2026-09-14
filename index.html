@@ -593,6 +593,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="ep-nav-btn" id="dayNext">›</button>
       <button class="day-today-btn" onclick="goToday()">Oggi</button>
       <div class="day-stat" id="dayStat"></div>
+      <div id="dayOrderStamp" style="display:none;font-family:var(--mono);font-size:0.62rem;color:var(--text3);margin-left:0.8rem"></div>
     </div>
     <div class="scaletta" id="scaletta"></div>
   </div>
@@ -1208,6 +1209,9 @@ function cloudSave(){
           localArr.forEach(function(item){
             if(!item||!item.id) return;
             if(_locallyModified.has(item.id)){
+              // Stamp who saved this
+              item._lastSavedBy=CURRENT_USER||'—';
+              item._lastSavedAt=new Date().toISOString();
               var remote=remoteMap[item.id];
               if(remote){
                 // Check if remote has more sub-array elements — potential conflict
@@ -2079,12 +2083,12 @@ function vpMoveUp(secId, iso, tipo){
   var idx=siblings.findIndex(function(s){ return s.id===secId; });
   if(idx<=0) return;
   var a=siblings[idx-1], b=siblings[idx];
-  // Ensure both have explicit ordine values before swapping
   siblings.forEach(function(s,i){ s.assignment.ordine=i; });
   var tmp=a.assignment.ordine;
   a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
   markModified(a.id); markModified(b.id);
+  _stampOrderChange(iso);
   save(); openVistaPuntata(iso);
 }
 
@@ -2093,13 +2097,22 @@ function vpMoveDown(secId, iso, tipo){
   var idx=siblings.findIndex(function(s){ return s.id===secId; });
   if(idx<0||idx>=siblings.length-1) return;
   var a=siblings[idx], b=siblings[idx+1];
-  // Ensure both have explicit ordine values before swapping
   siblings.forEach(function(s,i){ s.assignment.ordine=i; });
   var tmp=a.assignment.ordine;
   a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
   markModified(a.id); markModified(b.id);
+  _stampOrderChange(iso);
   save(); openVistaPuntata(iso);
+}
+
+function _stampOrderChange(iso){
+  var header=S.sections.find(function(s){ return s.assignment&&s.assignment.date===iso&&s.type==='header'; });
+  if(header){
+    header._orderLastSavedBy=CURRENT_USER||'—';
+    header._orderLastSavedAt=new Date().toISOString();
+    markModified(header.id);
+  }
 }
 
 function vpBumper(label){
@@ -5009,6 +5022,13 @@ function renderPanelBody(sec){
     ${sec.assignment?`<button class="assign-clear" onclick="clearAssignment()">Rimuovi assegnazione</button>`:''}
   </div>`;
 
+  // Last saved info
+  if(sec._lastSavedBy||sec._lastSavedAt){
+    var ts=sec._lastSavedAt?new Date(sec._lastSavedAt):null;
+    var tsStr=ts?(ts.getDate()+'/'+(ts.getMonth()+1)+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0')):'';
+    h+='<div style="font-size:0.62rem;color:var(--text3);text-align:right;padding:0.3rem 0;margin-top:0.5rem;font-family:var(--mono)">Ultima modifica: '+(sec._lastSavedBy||'—')+(tsStr?' · '+tsStr:'')+'</div>';
+  }
+
   document.getElementById('pb').innerHTML=h;
 }
 
@@ -7092,6 +7112,11 @@ function showOspiteModal(g, isNew){
     +'</div></div>'
     +'</div>';
 
+  if(g._lastSavedBy||g._lastSavedAt){
+    var gts=g._lastSavedAt?new Date(g._lastSavedAt):null;
+    var gtsStr=gts?(gts.getDate()+'/'+(gts.getMonth()+1)+' '+String(gts.getHours()).padStart(2,'0')+':'+String(gts.getMinutes()).padStart(2,'0')):'';
+    html+='<div style="font-size:0.62rem;color:var(--text3);text-align:right;padding:0.3rem 0.5rem;font-family:var(--mono)">Ultima modifica: '+(g._lastSavedBy||'—')+(gtsStr?' · '+gtsStr:'')+'</div>';
+  }
   overlay.innerHTML=html;
   document.body.appendChild(overlay);
 
@@ -7716,6 +7741,20 @@ function renderDayView(){
   });
   document.getElementById('dayStat').innerHTML=
     `<b>${secs.length}</b> sezioni &nbsp;·&nbsp; <b>${dialogati}</b>/${total} elementi pronti`;
+
+  // Order timestamp
+  const header=secs.find(s=>s.type==='header');
+  const orderEl=document.getElementById('dayOrderStamp');
+  if(orderEl){
+    if(header&&header._orderLastSavedBy){
+      var ots=header._orderLastSavedAt?new Date(header._orderLastSavedAt):null;
+      var otsStr=ots?(ots.getDate()+'/'+(ots.getMonth()+1)+' '+String(ots.getHours()).padStart(2,'0')+':'+String(ots.getMinutes()).padStart(2,'0')):'';
+      orderEl.textContent='Ordine salvato da '+header._orderLastSavedBy+(otsStr?' · '+otsStr:'');
+      orderEl.style.display='';
+    } else {
+      orderEl.style.display='none';
+    }
+  }
 
   if(!secs.length){
     document.getElementById('scaletta').innerHTML=`
