@@ -534,6 +534,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <button class="hbtn" onclick="exportData()">↓ Export</button>
     <label class="hbtn" style="cursor:pointer">↑ Import<input type="file" id="importFile" accept=".json" style="display:none"></label>
     <span id="hdr-user" onclick="doChangeUser()" title="Cambia utente" style="font-family:var(--mono);font-size:0.72rem;color:var(--acc);font-weight:700;padding:0.2rem 0.6rem;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;cursor:pointer;white-space:nowrap">👤 —</span>
+    <button class="hbtn" id="pauseSyncBtn" onclick="togglePauseSync()" title="Blocca il polling automatico per 2 minuti">⏸ Pausa sync</button>
     <button class="hbtn" onclick="doLogout()" title="Esci e ricarica da cloud">⏏ Logout</button>
     <button class="hbtn primary" onclick="newSection()">+ Nuova sezione</button>
   </div>
@@ -8158,6 +8159,25 @@ function doChangeUser(){
   document.body.appendChild(overlay);
 }
 
+function togglePauseSync(){
+  var btn=document.getElementById('pauseSyncBtn');
+  if(window._syncPaused && Date.now() < window._syncPaused){
+    // Resume
+    window._syncPaused=null;
+    if(btn){ btn.textContent='⏸ Pausa sync'; btn.style.background=''; btn.style.color=''; }
+  } else {
+    // Pause for 2 minutes
+    window._syncPaused=Date.now()+120000;
+    if(btn){ btn.textContent='▶ Riprendi sync'; btn.style.background='#f0602a'; btn.style.color='#fff'; }
+    // Auto-resume after 2 minutes
+    setTimeout(function(){
+      window._syncPaused=null;
+      var b=document.getElementById('pauseSyncBtn');
+      if(b){ b.textContent='⏸ Pausa sync'; b.style.background=''; b.style.color=''; }
+    }, 120000);
+  }
+}
+
 function doLogout(){
   if(!confirm('Esci? I dati non salvati andranno persi.')) return;
   localStorage.clear();
@@ -8296,7 +8316,7 @@ document.getElementById('overlay').onclick=e=>{ if(e.target===e.currentTarget) s
 /* ═══════════════════════════════════
    PASSWORD GATE
 ═══════════════════════════════════ */
-var APP_PWD = 'Papa26b';
+var APP_PWD = 'Papa26';
 
 var CURRENT_USER = '';
 
@@ -8477,8 +8497,9 @@ function bootApp(){
     });
     setTimeout(migrateFromMain, 2000);
     setInterval(function(){
+      var loadPaused = window._syncPaused && Date.now() < window._syncPaused;
       var panelOpen = editingId || (document.getElementById('overlay').classList.contains('open'));
-      if(!panelOpen) cloudLoad(true);
+      if(!panelOpen && !loadPaused) cloudLoad(true);
       if(currentView==='deliverable') renderDeliverables();
     }, 30000);
   } else {
