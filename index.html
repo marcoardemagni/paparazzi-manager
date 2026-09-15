@@ -577,6 +577,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <button class="flt-btn" id="fltBtnMine" onclick="setSezFilter('mine')" title="Solo le sezioni assegnate a me">👤 Le mie</button>
       <select class="fselect" id="fltAssignment" onchange="renderSections()" style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-left:0.5rem;max-width:200px">
         <option value="unassigned" selected>Non inserite in puntata</option>
+        <option value="future">Non inserite + future</option>
         <option value="assigned">Inserite in puntata</option>
         <option value="all">Tutte</option>
       </select>
@@ -889,7 +890,7 @@ function mkSection(){
     nickname:'',
     type:'trending',
     fonte:'',
-    responsabile:'',
+    responsabile: CURRENT_USER||'',
     note:'',
     rvm:{needed:false,status:'richiesto',notes:'',duration:''},
     rvms:[],
@@ -1794,6 +1795,12 @@ function filteredSections(){
     var assignVal=assignmentFilter?assignmentFilter.value:'unassigned';
     if(assignVal==='unassigned' && sec.assignment&&sec.assignment.date) return false;
     if(assignVal==='assigned' && (!sec.assignment||!sec.assignment.date)) return false;
+    if(assignVal==='future'){
+      var today=new Date().toISOString().slice(0,10);
+      var hasDate=sec.assignment&&sec.assignment.date;
+      // Show: unassigned OR assigned to today/future
+      if(hasDate && sec.assignment.date < today) return false;
+    }
     // Hide untitled sections unless "all" is selected
     if(assignVal!=='all' && (!sec.title||!sec.title.trim())) return false;
     if(filters.type!=='all'){
