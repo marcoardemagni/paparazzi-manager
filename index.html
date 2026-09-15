@@ -698,6 +698,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="exportGiornalieroRVM()">📋 Foto+RVM+Props</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" id="vpExportBtn">&#x1F4C4; Esporta scaletta</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;background:#1a3a2a;color:#4ade80;border-color:#2a5a38" id="vpSaveOrderBtn" onclick="vpSalvaOrdine()" title="Salva ordine e aggiorna timestamp puntata">💾 Salva ordine</button>
+          <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="vpRipristinaOrdineClassico()" title="Rimuove ordine manuale e torna al classico">↺ Ordine classico</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;background:#8b1a1a;color:#fff;border-color:#c0392b" onclick="deletePuntata()" title="Elimina tutti i blocchi di questa puntata">🗑 Elimina puntata</button>
           <button class="vp-close" onclick="closeVistaPuntata()">✕</button>
         </div>
@@ -2130,6 +2131,8 @@ function sortSezioniPuntata(secs){
 }
 
 function initEpOrdine(iso){
+  // Only initialise in-memory — never markModified, never save/cloudSave.
+  // This ensures existing episodes are never corrupted by a background write.
   var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso&&s.type!=='header'; });
   if(secs.some(function(s){ return s.assignment.ordine!==undefined; })) return;
   var sorted=secs.slice().sort(function(a,b){
@@ -2139,7 +2142,7 @@ function initEpOrdine(iso){
     var rb=b.assignment&&b.assignment.blocco!=null?b.assignment.blocco:9999;
     return ra-rb;
   });
-  sorted.forEach(function(s,i){ s.assignment.ordine=i; markModified(s.id); });
+  sorted.forEach(function(s,i){ s.assignment.ordine=i; }); // no markModified
 }
 
 function isMartedi(iso){ var d=new Date(iso+'T12:00:00'); return d.getDay()===2; }
@@ -2298,6 +2301,26 @@ function vpMoveDown(secId, iso){
   markModified(a.id); markModified(b.id);
   _stampOrderChange(iso);
   save(); cloudSave(); openVistaPuntata(iso);
+}
+
+function ripristinaOrdineClassicoTutto(){
+  // Remove assignment.ordine from every section in every episode
+  S.sections.forEach(function(s){
+    if(s.assignment&&s.assignment.ordine!==undefined){
+      delete s.assignment.ordine;
+      markModified(s.id);
+    }
+  });
+  save(); cloudSave();
+}
+
+function vpRipristinaOrdineClassico(){
+  var iso=window._vpCurrentIso;
+  if(!confirm('Ripristinare l\'ordine classico per TUTTE le puntate? Gli ordini manuali andranno persi.')) return;
+  ripristinaOrdineClassicoTutto();
+  var btn=document.querySelector('[onclick="vpRipristinaOrdineClassico()"]');
+  if(btn){ var orig=btn.textContent; btn.textContent='✓ Ripristinato'; setTimeout(function(){ btn.textContent=orig; },2000); }
+  if(iso) openVistaPuntata(iso);
 }
 
 function vpSalvaOrdine(){
