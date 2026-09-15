@@ -2112,8 +2112,10 @@ function getTipoOrdine(sec){
 }
 
 function sortSezioniPuntata(secs){
-  var hasGlobalOrdine=secs.some(function(s){ return s.assignment&&s.assignment.ordine!==undefined; });
-  if(hasGlobalOrdine){
+  // Only use manual ordine if ALL non-header secs have it set
+  var nonHeader=secs.filter(function(s){ return s.type!=='header'; });
+  var allHaveOrdine=nonHeader.length>0&&nonHeader.every(function(s){ return s.assignment&&s.assignment.ordine!==undefined; });
+  if(allHaveOrdine){
     return secs.slice().sort(function(a,b){
       var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:9999;
       var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:9999;
@@ -2121,6 +2123,7 @@ function sortSezioniPuntata(secs){
       return getTipoOrdine(a)-getTipoOrdine(b);
     });
   }
+  // Classic sort: TYPE_ORDER + blocco
   return secs.slice().sort(function(a,b){
     var oa=getTipoOrdine(a), ob=getTipoOrdine(b);
     if(oa!==ob) return oa-ob;
@@ -2329,7 +2332,8 @@ function vpRipristinaOrdineClassico(){
   if(!ok) return;
   var btn=document.querySelector('[onclick="vpRipristinaOrdineClassico()"]');
   if(btn){ var orig=btn.textContent; btn.textContent='✓ Ripristinato'; setTimeout(function(){ btn.textContent=orig; },2000); }
-  if(iso) openVistaPuntata(iso);
+  // Reload the popup after a short delay to let save() propagate
+  if(iso) setTimeout(function(){ openVistaPuntata(iso); }, 200);
 }
 
 function vpSalvaOrdine(){
