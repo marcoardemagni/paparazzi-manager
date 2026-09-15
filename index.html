@@ -520,8 +520,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <button class="htab" id="tabCalendario" onclick="showView('calendario')">Calendario</button>
     <button class="htab" id="tabOspiti" onclick="showView('ospiti')">Ospiti</button>
     <button class="htab" id="tabEpisodi" onclick="showView('episodi')">Puntate</button>
-    <button class="htab" id="tabLavorazione" onclick="showView('lavorazione')">In lavorazione</button>
+    <button class="htab" id="tabLavorazione" onclick="showView('lavorazione')" style="display:none">In lavorazione</button>
     <button class="htab" id="tabSezioni" onclick="showView('sezioni')">Sezioni</button>
+    <button class="htab" id="tabCestino" onclick="showView('cestino')">🗑 Cestino</button>
     <button class="htab" id="tabGiorno" onclick="showView('giorno')" style="display:none">Giornaliera</button>
     <button class="htab" id="tabDeliverable" onclick="showView('deliverable')">Deliverables</button>
   </div>
@@ -691,6 +692,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
           <div class="vp-title" id="vpTitle">—</div>
           <div class="vp-subtitle" id="vpSubtitle"></div>
           <div id="vpOrderStamp" style="display:none;font-family:var(--mono);font-size:0.6rem;color:var(--text3);margin-top:2px"></div>
+          <div id="vpModStamp" style="display:none;font-family:var(--mono);font-size:0.6rem;color:var(--text3);margin-top:2px"></div>
         </div>
         <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0">
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="exportGiornalieroRVM()">📋 Foto+RVM+Props</button>
@@ -701,6 +703,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
       <div class="vp-body" id="vpBody"></div>
     </div>
+  </div>
+
+  <!-- CESTINO VIEW -->
+  <div id="viewCestino" style="display:none;padding:1rem">
+    <div style="font-family:var(--mono);font-size:0.75rem;color:var(--text3);margin-bottom:0.8rem">Sezioni eliminate — clicca Ripristina per recuperarle.</div>
+    <div id="cestinoGrid"></div>
   </div>
 
   <!-- IN LAVORAZIONE VIEW -->
@@ -902,6 +910,7 @@ function mkSection(){
     info:'',
     assignment:null,
     createdAt: new Date().toISOString(),
+    createdBy: CURRENT_USER||'—',
     updatedAt: Date.now(),
     prodStatus: { fattibilita: 0, dataRicezione: '', grezzoRicevuto: false, inMontaggio: false, pronto: false }
   };
@@ -1785,6 +1794,8 @@ function filteredSections(){
   var twoTypes=['trending','hotstuff'];
 
   return S.sections.filter(sec=>{
+    // Exclude soft-deleted (cestino)
+    if(sec.deleted) return false;
     // Apply sezFilter
     if(sezFilter==='default' && !defaultTypes.includes(sec.type)) return false;
     if(sezFilter==='two' && !twoTypes.includes(sec.type)) return false;
@@ -2183,8 +2194,9 @@ function openVistaPuntata(iso){
   document.getElementById('vpBody').innerHTML=h;
   // Order timestamp
   var vpOrderEl=document.getElementById('vpOrderStamp');
+  var vpModEl=document.getElementById('vpModStamp');
+  var hdrSec=secs.find(function(s){ return s.type==='header'; });
   if(vpOrderEl){
-    var hdrSec=secs.find(function(s){ return s.type==='header'; });
     if(hdrSec&&hdrSec._orderLastSavedBy){
       var ots=hdrSec._orderLastSavedAt?new Date(hdrSec._orderLastSavedAt):null;
       var otsStr=ots?(ots.getDate()+'/'+(ots.getMonth()+1)+' '+String(ots.getHours()).padStart(2,'0')+':'+String(ots.getMinutes()).padStart(2,'0')):'';
@@ -2192,6 +2204,21 @@ function openVistaPuntata(iso){
       vpOrderEl.style.display='';
     } else {
       vpOrderEl.style.display='none';
+    }
+  }
+  if(vpModEl){
+    // Try header stamp first, fallback to most recent _lastSavedAt across all sections of this episode
+    var modBy='', modAt=null;
+    if(hdrSec&&hdrSec._epLastModBy){ modBy=hdrSec._epLastModBy; modAt=hdrSec._epLastModAt?new Date(hdrSec._epLastModAt):null; }
+    else {
+      secs.forEach(function(s){ if(s._lastSavedAt){ var d=new Date(s._lastSavedAt); if(!modAt||d>modAt){ modAt=d; modBy=s._lastSavedBy||'—'; } } });
+    }
+    if(modBy||modAt){
+      var mtsStr=modAt?(modAt.getDate()+'/'+(modAt.getMonth()+1)+' '+String(modAt.getHours()).padStart(2,'0')+':'+String(modAt.getMinutes()).padStart(2,'0')):'';
+      vpModEl.textContent='Ultima modifica puntata: '+(modBy||'—')+(mtsStr?' · '+mtsStr:'');
+      vpModEl.style.display='';
+    } else {
+      vpModEl.style.display='none';
     }
   }
 
@@ -4610,6 +4637,19 @@ function renderPanelBody(sec){
     +'<div><div class="flbl">Responsabile</div>'
     +'<input class="finput" id="f-resp" value="'+esc(sec.responsabile)+'" placeholder="Nome\u2026">'
     +'</div></div>'
+    +'<div class="assign-block" style="margin-top:0.6rem">'
+    +'<div class="frow-2">'
+    +'<div><div class="flbl">Data puntata</div>'
+    +'<div style="display:flex;gap:0.4rem;align-items:center">'
+    +'<input class="finput" type="date" id="f-assign-date" value="'+(sec.assignment&&sec.assignment.date||'')+'" oninput="aggiornaPreviewPuntata(this.value)" style="flex:1">'
+    +'<button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;flex-shrink:0" onclick="openPreviewPuntata(document.getElementById(\'f-assign-date\').value)" title="Vedi stato puntata">👁</button>'
+    +'<button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;flex-shrink:0;color:#4ade80;border-color:#4ade80" onclick="openPreviewSettimana(document.getElementById(\'f-assign-date\').value)" title="Vedi settimana">🟢👁</button>'
+    +'</div></div>'
+    +'<div><div class="flbl">N° Blocco</div>'
+    +'<input class="finput" type="number" id="f-assign-blocco" min="1" max="20" value="'+(sec.assignment&&sec.assignment.blocco||'')+'" placeholder="es. 5">'
+    +'</div></div>'
+    +'<div id="puntata-preview-inline" style="margin-top:0.4rem;font-size:0.72rem;color:var(--text3)"></div>'
+    +(sec.assignment?'<button class="assign-clear" onclick="clearAssignment()">Rimuovi assegnazione</button>':'')+'</div>'
     +(sec.type!=='headlines'?
       '<div class="frow"><div class="flbl">Fonte / Link</div>'
       +'<input class="finput" id="f-fonte" value="'+esc(sec.fonte)+'" placeholder="https://\u2026">'
@@ -5203,31 +5243,18 @@ function renderPanelBody(sec){
     <textarea class="ftextarea" id="f-info" placeholder="Lower third, contatti ospite, note tecniche…">${esc(sec.info)}</textarea>
   </div>`;
 
-  // ASSEGNAZIONE PUNTATA
-  h+=sdiv('Assegnazione Puntata');
-  h+=`<div class="assign-block">
-    <div class="frow-2">
-      <div>
-        <div class="flbl">Data puntata</div>
-        <div style="display:flex;gap:0.4rem;align-items:center">
-          <input class="finput" type="date" id="f-assign-date" value="${(sec.assignment&&sec.assignment.date)||''}" oninput="aggiornaPreviewPuntata(this.value)" style="flex:1">
-          <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.5rem;flex-shrink:0" onclick="openPreviewPuntata(document.getElementById('f-assign-date').value)" title="Vedi stato puntata">👁</button>
-        </div>
-      </div>
-      <div>
-        <div class="flbl">N° Blocco</div>
-        <input class="finput" type="number" id="f-assign-blocco" min="1" max="20" value="${(sec.assignment&&sec.assignment.blocco)||''}" placeholder="es. 5">
-      </div>
-    </div>
-    <div id="puntata-preview-inline" style="margin-top:0.4rem;font-size:0.72rem;color:var(--text3)"></div>
-    ${sec.assignment?`<button class="assign-clear" onclick="clearAssignment()">Rimuovi assegnazione</button>`:''}
-  </div>`;
+  // ASSEGNAZIONE PUNTATA — spostata in cima, dopo tipo/durata/responsabile
 
   // Last saved info
-  if(sec._lastSavedBy||sec._lastSavedAt){
-    var ts=sec._lastSavedAt?new Date(sec._lastSavedAt):null;
-    var tsStr=ts?(ts.getDate()+'/'+(ts.getMonth()+1)+' '+String(ts.getHours()).padStart(2,'0')+':'+String(ts.getMinutes()).padStart(2,'0')):'';
-    h+='<div style="font-size:0.62rem;color:var(--text3);text-align:right;padding:0.3rem 0;margin-top:0.5rem;font-family:var(--mono)">Ultima modifica: '+(sec._lastSavedBy||'—')+(tsStr?' · '+tsStr:'')+'</div>';
+  {
+    var _lby=sec._lastSavedBy, _lat=sec._lastSavedAt?new Date(sec._lastSavedAt):null;
+    var _cby=sec.createdBy, _cat=sec.createdAt?new Date(sec.createdAt):null;
+    function _fmtTs(d){ return d?(d.getDate()+'/'+(d.getMonth()+1)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')):''; }
+    if(_lby||_lat){
+      h+='<div style="font-size:0.62rem;color:var(--text3);text-align:right;padding:0.3rem 0;margin-top:0.5rem;font-family:var(--mono)">Ultima modifica: '+(_lby||'—')+(_lat?' · '+_fmtTs(_lat):'')+'</div>';
+    } else if(_cby||_cat){
+      h+='<div style="font-size:0.62rem;color:var(--text3);text-align:right;padding:0.3rem 0;margin-top:0.5rem;font-family:var(--mono)">Creata da: '+(_cby||'—')+(_cat?' · '+_fmtTs(_cat):'')+'</div>';
+    }
   }
 
   document.getElementById('pb').innerHTML=h;
@@ -5616,6 +5643,47 @@ function openPreviewPuntata(iso){
   document.body.appendChild(overlay);
 }
 
+function openPreviewSettimana(iso){
+  if(!iso){ alert('Seleziona prima una data.'); return; }
+  var wid=weekId(new Date(iso+'T12:00:00'));
+  var dates=weekDates(wid);
+  var MONTHS_IT=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  var DAYS_IT=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  var weekLabel=fmtWeekRange(wid);
+  var daysHtml=dates.map(function(d){
+    var dIso=dateToIso(d);
+    var daySecs=S.sections.filter(function(s){ return !s.deleted&&s.assignment&&s.assignment.date===dIso&&s.id!==editingId; });
+    daySecs=sortSezioniPuntata(daySecs);
+    var dayLabel=DAYS_IT[d.getDay()]+' '+d.getDate()+' '+MONTHS_IT[d.getMonth()];
+    var isSelected=dIso===iso;
+    var rows=daySecs.length
+      ? daySecs.map(function(s,i){
+          var tc=TYPE_COLORS[s.type]||{bg:'#2a2a2a',color:'#a1a1aa'};
+          return '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0.4rem;background:var(--bg2);border-radius:4px">'
+            +'<div style="font-family:var(--mono);font-size:0.6rem;color:var(--text3);width:20px;text-align:right;flex-shrink:0">B'+(i+1)+'</div>'
+            +'<div style="background:'+tc.bg+';color:'+tc.color+';font-family:var(--mono);font-size:0.57rem;font-weight:700;padding:0.1rem 0.35rem;border-radius:3px;white-space:nowrap;flex-shrink:0">'+(TYPE_LABELS[s.type]||s.type)+'</div>'
+            +'<div style="flex:1;font-size:0.75rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(s.title||'—')+'</div>'
+            +'</div>';
+        }).join('')
+      : '<div style="color:var(--text3);font-size:0.72rem;padding:0.2rem 0.4rem">Nessun blocco</div>';
+    return '<div style="border:1px solid '+(isSelected?'#4ade80':'var(--brd)')+';border-radius:7px;padding:0.6rem;background:'+(isSelected?'var(--bg)':'var(--bg2)')+';">'
+      +'<div style="font-family:var(--mono);font-size:0.7rem;font-weight:700;margin-bottom:0.35rem;color:'+(isSelected?'#4ade80':'var(--text2)')+'">'+dayLabel+' <span style="font-weight:400;color:var(--text3)">('+daySecs.length+')</span></div>'
+      +'<div style="display:flex;flex-direction:column;gap:0.2rem">'+rows+'</div>'
+      +'</div>';
+  }).join('');
+  overlay.innerHTML='<div style="background:var(--bg);border-radius:10px;padding:1.2rem;width:min(720px,96vw);max-height:85vh;overflow-y:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem">'
+    +'<div style="font-weight:700;font-size:0.95rem">Settimana '+weekLabel+'</div>'
+    +'<button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:inherit;opacity:0.6">&times;</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem">'+daysHtml+'</div>'
+    +'</div>';
+  document.body.appendChild(overlay);
+}
+
 function clearAssignment(){
   const sec=S.sections.find(s=>s.id===editingId); if(!sec) return;
   sec.assignment=null; save(); renderPanelBody(sec);
@@ -5848,6 +5916,12 @@ function collectForm(){
     secToMark._lastSavedBy=CURRENT_USER||'—';
     secToMark._lastSavedAt=new Date().toISOString();
     markModified(secToMark.id);
+    // Stamp episode header with last-modified info
+    if(secToMark.assignment&&secToMark.assignment.date){
+      var _epDate=secToMark.assignment.date;
+      var _epHdr=S.sections.find(function(s){ return s.type==='header'&&s.assignment&&s.assignment.date===_epDate; });
+      if(_epHdr){ _epHdr._epLastModBy=CURRENT_USER||'—'; _epHdr._epLastModAt=new Date().toISOString(); markModified(_epHdr.id); }
+    }
   }
   save();
 }
@@ -5904,11 +5978,46 @@ function _doSaveAndClose(){
 function closePanel(){ document.getElementById('overlay').classList.remove('open'); editingId=null; render(); }
 function deleteSection(){
   if(!editingId) return;
-  if(!confirm('Eliminare questa sezione?')) return;
-  if(!S.deletedIds) S.deletedIds=[];
-  S.deletedIds.push(editingId);
-  S.sections=S.sections.filter(s=>s.id!==editingId);
+  if(!confirm('Spostare questa sezione nel cestino?')) return;
+  var sec=S.sections.find(function(s){ return s.id===editingId; });
+  if(sec){ sec.deleted=true; sec.deletedAt=Date.now(); sec.deletedBy=CURRENT_USER||''; sec.updatedAt=Date.now(); markModified(sec.id); }
   save(); document.getElementById('overlay').classList.remove('open'); editingId=null; render();
+}
+
+/* ═══════════════════════════════════
+   CESTINO
+═══════════════════════════════════ */
+function renderCestino(){
+  var grid=document.getElementById('cestinoGrid');
+  if(!grid) return;
+  var deleted=S.sections.filter(function(s){ return s.deleted; });
+  if(!deleted.length){
+    grid.innerHTML='<div class="empty"><b>🗑</b>Il cestino è vuoto.</div>';
+    return;
+  }
+  var MONTHS_IT=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  var DAYS_IT=['dom','lun','mar','mer','gio','ven','sab'];
+  function fmtTs(ts){ if(!ts) return ''; var d=new Date(ts); return DAYS_IT[d.getDay()]+' '+d.getDate()+' '+MONTHS_IT[d.getMonth()]+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+  grid.innerHTML='<div style="display:flex;flex-direction:column;gap:0.35rem">'+deleted.map(function(s){
+    var color=typeBorderColor(s.type);
+    var typeLabel=TYPE_LABELS[s.type]||s.type;
+    var deletedInfo=(s.deletedBy?'da '+s.deletedBy+' ':'')+fmtTs(s.deletedAt);
+    return '<div style="background:var(--surf);border:1px solid var(--brd);border-left:3px solid '+color+';border-radius:6px;display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.7rem">'
+      +'<span style="font-family:var(--mono);font-size:0.6rem;font-weight:700;padding:0.1rem 0.4rem;border-radius:3px;background:var(--bg3);color:var(--text2);white-space:nowrap;text-transform:uppercase">'+esc(typeLabel)+'</span>'
+      +'<span style="font-weight:600;font-size:0.88rem;flex:1;color:var(--text)">'+esc(s.title||'—')+'</span>'
+      +(deletedInfo?'<span style="font-family:var(--mono);font-size:0.62rem;color:var(--text3)">'+esc(deletedInfo)+'</span>':'')
+      +'<button class="btn" style="font-size:0.7rem;padding:0.2rem 0.6rem;white-space:nowrap" data-id="'+s.id+'" onclick="ripristinaSezione(this.dataset.id)">↩ Ripristina</button>'
+      +'</div>';
+  }).join('')+'</div>';
+}
+
+function ripristinaSezione(id){
+  var sec=S.sections.find(function(s){ return s.id===id; });
+  if(!sec) return;
+  delete sec.deleted; delete sec.deletedAt; delete sec.deletedBy;
+  sec.updatedAt=Date.now();
+  markModified(sec.id);
+  save(); renderCestino();
 }
 
 /* ═══════════════════════════════════
@@ -5923,6 +6032,8 @@ function showView(v){
   document.getElementById('tabGiorno').classList.toggle('active',v==='giorno');
   document.getElementById('tabDeliverable').classList.toggle('active',v==='deliverable');
   document.getElementById('tabOspiti').classList.toggle('active',v==='ospiti');
+  document.getElementById('tabCestino').classList.toggle('active',v==='cestino');
+  document.getElementById('viewCestino').style.display=v==='cestino'?'block':'none';
   document.getElementById('viewCalendario').style.display=v==='calendario'?'block':'none';
   document.getElementById('viewLavorazione').style.display=v==='lavorazione'?'block':'none';
   document.getElementById('viewSezioni').style.display=v==='sezioni'?'block':'none';
@@ -5936,6 +6047,7 @@ function showView(v){
 
 function render(){
   if(currentView==='sezioni') renderSections();
+  else if(currentView==='cestino') renderCestino();
   else if(currentView==='episodi') renderEpisodeView();
   else if(currentView==='deliverable') renderDeliverables();
   else if(currentView==='calendario') renderCalendario();
