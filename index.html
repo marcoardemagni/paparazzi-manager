@@ -1760,6 +1760,8 @@ function eseguiQuery(queryLines, updateLines, btn){
 }
 
 function setSezFilter(val){
+  // Toggle: if already active, go back to default
+  if(val==='mine'&&sezFilter==='mine') val='default';
   sezFilter=val;
   ['default','two','all','mine'].forEach(function(v){
     var b=document.getElementById('fltBtn'+v.charAt(0).toUpperCase()+v.slice(1));
