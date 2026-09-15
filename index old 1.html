@@ -697,7 +697,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
         <div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0">
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" onclick="exportGiornalieroRVM()">📋 Foto+RVM+Props</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem" id="vpExportBtn">&#x1F4C4; Esporta scaletta</button>
-          <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;background:#1a3a2a;color:#4ade80;border-color:#2a5a38" id="vpSaveOrderBtn" onclick="vpSalvaOrdine()" title="Salva ordine e aggiorna timestamp puntata">💾 Salva ordine</button>
           <button class="btn" style="font-size:0.72rem;padding:0.2rem 0.6rem;background:#8b1a1a;color:#fff;border-color:#c0392b" onclick="deletePuntata()" title="Elimina tutti i blocchi di questa puntata">🗑 Elimina puntata</button>
           <button class="vp-close" onclick="closeVistaPuntata()">✕</button>
         </div>
@@ -984,7 +983,7 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v17.0 – 2026-09-15';
+var APP_VERSION='v16.0 – 2026-09-14';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
 document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('hdr-version');
@@ -2111,35 +2110,13 @@ function getTipoOrdine(sec){
 }
 
 function sortSezioniPuntata(secs){
-  var hasGlobalOrdine=secs.some(function(s){ return s.assignment&&s.assignment.ordine!==undefined; });
-  if(hasGlobalOrdine){
-    return secs.slice().sort(function(a,b){
-      var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:9999;
-      var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:9999;
-      if(ra!==rb) return ra-rb;
-      return getTipoOrdine(a)-getTipoOrdine(b);
-    });
-  }
   return secs.slice().sort(function(a,b){
     var oa=getTipoOrdine(a), ob=getTipoOrdine(b);
     if(oa!==ob) return oa-ob;
-    var ra=a.assignment&&a.assignment.blocco!=null?a.assignment.blocco:9999;
-    var rb=b.assignment&&b.assignment.blocco!=null?b.assignment.blocco:9999;
+    var ra=a.assignment&&a.assignment.ordine!==undefined?a.assignment.ordine:(a.assignment&&a.assignment.blocco!=null?a.assignment.blocco:9999);
+    var rb=b.assignment&&b.assignment.ordine!==undefined?b.assignment.ordine:(b.assignment&&b.assignment.blocco!=null?b.assignment.blocco:9999);
     return ra-rb;
   });
-}
-
-function initEpOrdine(iso){
-  var secs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso&&s.type!=='header'; });
-  if(secs.some(function(s){ return s.assignment.ordine!==undefined; })) return;
-  var sorted=secs.slice().sort(function(a,b){
-    var oa=getTipoOrdine(a), ob=getTipoOrdine(b);
-    if(oa!==ob) return oa-ob;
-    var ra=a.assignment&&a.assignment.blocco!=null?a.assignment.blocco:9999;
-    var rb=b.assignment&&b.assignment.blocco!=null?b.assignment.blocco:9999;
-    return ra-rb;
-  });
-  sorted.forEach(function(s,i){ s.assignment.ordine=i; markModified(s.id); });
 }
 
 function isMartedi(iso){ var d=new Date(iso+'T12:00:00'); return d.getDay()===2; }
@@ -2188,12 +2165,12 @@ function openVistaPuntata(iso){
     if(s.props&&s.props.needed) pills2+='<span style="'+pStyle2(s.props.status||'richiesto')+'">PROPS</span>';
     var meta2=pills2+(s.responsabile?'<span style="font-family:var(--mono);font-size:0.65rem;color:#fff;font-weight:700;margin-left:4px">'+esc(s.responsabile.toUpperCase())+'</span>':'');
     var isConflict=t==='trending'&&tCount>4;
-    var var canReorder=(t!=='header');
+    var canReorder=(t==='trending'||t==='hotstuff');
     var reorderBtns='';
     if(canReorder){
       reorderBtns='<div style="display:flex;flex-direction:column;gap:2px;margin-left:4px">'
-        +'<button class="btn" style="font-size:0.6rem;padding:1px 5px;line-height:1" data-id="'+s.id+'" data-iso="'+iso+'" onclick="vpMoveUp(this.dataset.id,this.dataset.iso);event.stopPropagation()">▲</button>'
-        +'<button class="btn" style="font-size:0.6rem;padding:1px 5px;line-height:1" data-id="'+s.id+'" data-iso="'+iso+'" onclick="vpMoveDown(this.dataset.id,this.dataset.iso);event.stopPropagation()">▼</button>'
+        +'<button class="btn" style="font-size:0.6rem;padding:1px 5px;line-height:1" data-id="'+s.id+'" data-iso="'+iso+'" data-type="'+t+'" onclick="vpMoveUp(this.dataset.id,this.dataset.iso,this.dataset.type);event.stopPropagation()">▲</button>'
+        +'<button class="btn" style="font-size:0.6rem;padding:1px 5px;line-height:1" data-id="'+s.id+'" data-iso="'+iso+'" data-type="'+t+'" onclick="vpMoveDown(this.dataset.id,this.dataset.iso,this.dataset.type);event.stopPropagation()">▼</button>'
         +'</div>';
     }
     h+='<div class="vp-row'+(isConflict?' vp-row-conflict':'')+'" onclick="openSection(\''+s.id+'\')" title="'+(TYPE_LABELS[t]||t)+'" style="border-left:3px solid '+typeBorderColor(t)+'">'
@@ -2248,10 +2225,12 @@ function openVistaPuntata(iso){
 function vpAddSezione(iso, tipo){
   var sec=mkSection();
   sec.type=tipo;
-  initEpOrdine(iso);
-  var allSecs=S.sections.filter(function(s){ return s.assignment&&s.assignment.date===iso&&s.type!=='header'; });
+  var siblings=S.sections.filter(function(s){
+    return s.type===tipo&&s.assignment&&s.assignment.date===iso;
+  });
   var maxOrd=0;
-  allSecs.forEach(function(s){ var o=vpGetOrdine(s); if(o>maxOrd) maxOrd=o; });
+  siblings.forEach(function(s){ var o=s.assignment.ordine||s.assignment.blocco||0; if(o>maxOrd) maxOrd=o; });
+  // Mark as assigned to this date
   sec.assignment={date:iso, ordine:maxOrd+1, blocco:maxOrd+1};
   sec.plan={primaData:iso, dataPreferita:iso, ultimaData:iso, rilevanza:5, fonteUrl:''};
   S.sections.push(sec);
@@ -2260,23 +2239,20 @@ function vpAddSezione(iso, tipo){
   window._vpPendingRefresh=iso;
 }
 
-function vpGetOrdine(s){ return s.assignment&&s.assignment.ordine!==undefined?s.assignment.ordine:(s.assignment&&s.assignment.blocco||0); }
+function vpGetOrdine(s){ return s.assignment.ordine!==undefined ? s.assignment.ordine : (s.assignment.blocco||0); }
 
-function vpGetAllSecs(iso){
+function vpGetSiblings(iso, tipo){
   return S.sections.filter(function(s){
-    return s.type!=='header'&&s.assignment&&s.assignment.date===iso;
+    return s.type===tipo&&s.assignment&&s.assignment.date===iso;
   }).sort(function(a,b){ return vpGetOrdine(a)-vpGetOrdine(b); });
 }
 
-function vpGetSiblings(iso, tipo){ return vpGetAllSecs(iso); }
-
-function vpMoveUp(secId, iso){
-  initEpOrdine(iso);
-  var all=vpGetAllSecs(iso);
-  var idx=all.findIndex(function(s){ return s.id===secId; });
+function vpMoveUp(secId, iso, tipo){
+  var siblings=vpGetSiblings(iso,tipo);
+  var idx=siblings.findIndex(function(s){ return s.id===secId; });
   if(idx<=0) return;
-  var a=all[idx-1], b=all[idx];
-  all.forEach(function(s,i){ s.assignment.ordine=i; });
+  var a=siblings[idx-1], b=siblings[idx];
+  siblings.forEach(function(s,i){ s.assignment.ordine=i; });
   var tmp=a.assignment.ordine;
   a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
@@ -2285,37 +2261,18 @@ function vpMoveUp(secId, iso){
   save(); cloudSave(); openVistaPuntata(iso);
 }
 
-function vpMoveDown(secId, iso){
-  initEpOrdine(iso);
-  var all=vpGetAllSecs(iso);
-  var idx=all.findIndex(function(s){ return s.id===secId; });
-  if(idx<0||idx>=all.length-1) return;
-  var a=all[idx], b=all[idx+1];
-  all.forEach(function(s,i){ s.assignment.ordine=i; });
+function vpMoveDown(secId, iso, tipo){
+  var siblings=vpGetSiblings(iso,tipo);
+  var idx=siblings.findIndex(function(s){ return s.id===secId; });
+  if(idx<0||idx>=siblings.length-1) return;
+  var a=siblings[idx], b=siblings[idx+1];
+  siblings.forEach(function(s,i){ s.assignment.ordine=i; });
   var tmp=a.assignment.ordine;
   a.assignment.ordine=b.assignment.ordine;
   b.assignment.ordine=tmp;
   markModified(a.id); markModified(b.id);
   _stampOrderChange(iso);
   save(); cloudSave(); openVistaPuntata(iso);
-}
-
-function vpSalvaOrdine(){
-  var iso=window._vpCurrentIso;
-  if(!iso) return;
-  initEpOrdine(iso);
-  var all=vpGetAllSecs(iso);
-  all.forEach(function(s,i){ s.assignment.ordine=i; markModified(s.id); });
-  _stampOrderChange(iso);
-  // Also stamp _epLastModBy on header
-  var hdr=S.sections.find(function(s){ return s.type==='header'&&s.assignment&&s.assignment.date===iso; });
-  if(hdr){ hdr._epLastModBy=CURRENT_USER||'—'; hdr._epLastModAt=new Date().toISOString(); markModified(hdr.id); }
-  save(); cloudSave();
-  // Refresh timestamps in UI
-  var vpModEl=document.getElementById('vpModStamp');
-  if(vpModEl){ vpModEl.textContent='Ultima modifica puntata: '+(CURRENT_USER||'—')+' · '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}); vpModEl.style.display=''; }
-  var btn=document.getElementById('vpSaveOrderBtn');
-  if(btn){ var orig=btn.textContent; btn.textContent='✓ Salvato'; setTimeout(function(){ btn.textContent=orig; },1800); }
 }
 
 function _stampOrderChange(iso){
