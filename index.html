@@ -2305,19 +2305,28 @@ function vpMoveDown(secId, iso){
 
 function ripristinaOrdineClassicoTutto(){
   // Remove assignment.ordine from every section in every episode
+  var count=0;
   S.sections.forEach(function(s){
     if(s.assignment&&s.assignment.ordine!==undefined){
       delete s.assignment.ordine;
-      markModified(s.id);
+      s.updatedAt=Date.now();
+      count++;
     }
   });
-  save(); cloudSave();
+  if(!count){ alert('Nessun ordine manuale trovato — già in ordine classico.'); return false; }
+  // Mark ALL sections modified to force full Firebase write
+  S.sections.forEach(function(s){ markModified(s.id); });
+  save();
+  // Force immediate cloud save (not debounced)
+  setTimeout(function(){ cloudSave(); }, 100);
+  return true;
 }
 
 function vpRipristinaOrdineClassico(){
   var iso=window._vpCurrentIso;
   if(!confirm('Ripristinare l\'ordine classico per TUTTE le puntate? Gli ordini manuali andranno persi.')) return;
-  ripristinaOrdineClassicoTutto();
+  var ok=ripristinaOrdineClassicoTutto();
+  if(!ok) return;
   var btn=document.querySelector('[onclick="vpRipristinaOrdineClassico()"]');
   if(btn){ var orig=btn.textContent; btn.textContent='✓ Ripristinato'; setTimeout(function(){ btn.textContent=orig; },2000); }
   if(iso) openVistaPuntata(iso);
