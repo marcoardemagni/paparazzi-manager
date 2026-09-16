@@ -3929,7 +3929,7 @@ function generaScalettaDocx(iso, soloDialogo){
     if(tk==='headlines'){
       var hLines=[b,'','FILIPPO ALLO SPAZIO RASSEGNA',''];
       if(sec&&sec.foto&&sec.foto.length){
-        sec.foto.forEach(function(f,i){ hLines.push('FOTO '+(i+1)+(f.desc?' – '+f.desc.toUpperCase():'')); });
+        sec.foto.forEach(function(f,i){ var fd=f.desc?f.desc.replace(/^[\s\-–—]+/,'').toUpperCase():''; hLines.push('FOTO '+(i+1)+(fd?' – '+fd:'')); hLines.push(''); });
         hLines.push('');
       }
       hLines.push('FILIPPO TORNA AL TAVOLO');
