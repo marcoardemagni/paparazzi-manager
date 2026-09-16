@@ -4467,21 +4467,44 @@ function exportDomandoneSettimanale(){
       });
     }
 
-    if(fotoItems.length){
+    // Bandierina info: flag + visualNote
+    var bf=bandierina&&bandierina.script&&bandierina.script.bandierina||null;
+    var bfFlag=bf&&bf.flag?bf.flag.toUpperCase():'';
+    var bfVisualNote=bf&&bf.visualNote?bf.visualNote:'';
+
+    if(bfFlag||bfVisualNote||fotoItems.length){
       children.push(new d.Paragraph({
-        text:'FOTO RICHIESTE',
+        text:'BANDIERINA',
         heading: d.HeadingLevel.HEADING_2,
         spacing:{before:200,after:100}
       }));
-      fotoItems.forEach(function(item,i){
+      if(bfFlag){
         children.push(new d.Paragraph({
-          children:[
-            new d.TextRun({text:'• ['+( item.sec.title||item.sec.type)+'] ',bold:true}),
-            new d.TextRun({text:item.foto.desc||'(senza descrizione)'})
-          ],
+          children:[new d.TextRun({text:'PAESE / TEMA: ',bold:true}),new d.TextRun({text:bfFlag})],
           spacing:{before:0,after:80}
         }));
-      });
+      }
+      if(bfVisualNote){
+        children.push(new d.Paragraph({
+          children:[new d.TextRun({text:'ISTRUZIONI REPARTO GRAFICO: ',bold:true}),new d.TextRun({text:bfVisualNote})],
+          spacing:{before:0,after:80}
+        }));
+      }
+      if(fotoItems.length){
+        children.push(new d.Paragraph({
+          children:[new d.TextRun({text:'FOTO RICHIESTE:',bold:true})],
+          spacing:{before:80,after:60}
+        }));
+        fotoItems.forEach(function(item,i){
+          children.push(new d.Paragraph({
+            children:[
+              new d.TextRun({text:'FOTO '+(i+1)+': ',bold:true}),
+              new d.TextRun({text:item.foto.desc||'(senza descrizione)'})
+            ],
+            spacing:{before:0,after:60}
+          }));
+        });
+      }
     }
 
     // Separator
