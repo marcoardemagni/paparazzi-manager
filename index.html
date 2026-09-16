@@ -986,7 +986,7 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v17.0 – 2026-09-15';
+var APP_VERSION='v18.0 – 2026-09-16';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
 document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('hdr-version');
@@ -8178,6 +8178,53 @@ function togglePauseSync(){
   }
 }
 
+/* ═══════════════════════════════════
+   INACTIVITY TIMER (10 min, warn at 8)
+═══════════════════════════════════ */
+var _inactivityTimer=null;
+var _inactivityWarnTimer=null;
+var _inactivityWarnShown=false;
+var INACTIVITY_LIMIT=10*60*1000;  // 10 minutes
+var INACTIVITY_WARN=8*60*1000;    // warn at 8 minutes
+
+function resetInactivityTimer(){
+  if(!_inactivityTimer) return; // not started yet (not logged in)
+  clearTimeout(_inactivityTimer);
+  clearTimeout(_inactivityWarnTimer);
+  // Remove warning if shown
+  if(_inactivityWarnShown){
+    var w=document.getElementById('inactivity-warn');
+    if(w) w.remove();
+    _inactivityWarnShown=false;
+  }
+  _inactivityWarnTimer=setTimeout(showInactivityWarning, INACTIVITY_WARN);
+  _inactivityTimer=setTimeout(function(){ forceLogout(); }, INACTIVITY_LIMIT);
+}
+
+function startInactivityTimer(){
+  var events=['mousemove','keydown','click','touchstart','scroll'];
+  events.forEach(function(ev){ document.addEventListener(ev, resetInactivityTimer, {passive:true}); });
+  resetInactivityTimer();
+}
+
+function showInactivityWarning(){
+  _inactivityWarnShown=true;
+  var w=document.createElement('div');
+  w.id='inactivity-warn';
+  w.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid #f0602a;border-radius:10px;padding:1rem 1.5rem;z-index:99990;display:flex;align-items:center;gap:1rem;box-shadow:0 4px 20px rgba(0,0,0,0.5);font-family:monospace';
+  w.innerHTML='<span style="color:#fbbf24;font-size:1.1rem">⚠️</span>'
+    +'<span style="color:#e8e6f0;font-size:0.85rem">Sei ancora lì? Verrai disconnesso tra <b>2 minuti</b> per inattività.</span>'
+    +'<button onclick="resetInactivityTimer()" style="background:#f0602a;color:#fff;border:none;padding:0.4rem 0.9rem;border-radius:5px;cursor:pointer;font-size:0.8rem;font-weight:700;white-space:nowrap">Sono qui</button>';
+  document.body.appendChild(w);
+}
+
+function forceLogout(){
+  var w=document.getElementById('inactivity-warn');
+  if(w) w.remove();
+  alert('Sessione scaduta per inattività. Verrai disconnesso.');
+  doLogout();
+}
+
 function doLogout(){
   if(!confirm('Esci? I dati non salvati andranno persi.')) return;
   localStorage.clear();
@@ -8384,17 +8431,113 @@ function showUserSelector(){
 
 function selectUserAndUpdate(name){
   setCurrentUser(name);
-  var gate=document.getElementById('pwd-gate');
-  if(gate) gate.remove();
-  bootApp();
-  setTimeout(function(){ showView('lavorazione'); aggiornaDaTesto(); }, 2000);
+  showSyncGate(name, true);
 }
 
 function selectUser(name){
   setCurrentUser(name);
+  showSyncGate(name);
+}
+
+function showSyncGate(name, doUpdate){
+  // Get local version info
+  var localTs = S && S.updatedAt ? new Date(S.updatedAt) : null;
+  var localBy = S && S._lastSavedBy ? S._lastSavedBy : (localStorage.getItem('ppz_last_saved_by')||'—');
+  function fmtDate(d){
+    if(!d) return '—';
+    var days=['dom','lun','mar','mer','gio','ven','sab'];
+    var months=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    return days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear()+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  var localStr = localTs ? fmtDate(localTs) : 'nessuna versione locale';
+
+  // Replace pwd-gate content with sync gate
+  var gate=document.getElementById('pwd-gate');
+  if(!gate) return;
+  gate.style.background='rgba(0,0,0,0.85)';
+  var inner=gate.querySelector('div');
+  if(inner){
+    inner.style.cssText='background:#1a1a2e;border:1px solid #3d3d58;border-radius:14px;padding:2rem;width:380px;box-shadow:0 8px 40px rgba(0,0,0,0.7);text-align:center;color:#e8e6f0';
+    inner.innerHTML=''
+      +'<div style="font-size:1.6rem;margin-bottom:0.5rem">☁</div>'
+      +'<div style="font-weight:800;font-size:1.1rem;margin-bottom:0.8rem;letter-spacing:0.04em">Benvenuto, '+name+'</div>'
+      +'<div style="background:#12121f;border:1px solid #2a2a40;border-radius:8px;padding:0.9rem;margin-bottom:1rem;font-family:monospace;font-size:0.78rem;line-height:1.7;text-align:left">'
+      +'<div style="color:#9e9bc0">Versione locale:</div>'
+      +'<div style="color:#fbbf24;font-weight:700">'+localStr+'</div>'
+      +(localBy&&localBy!=='—'?'<div style="color:#9e9bc0">salvata da <span style="color:#e8e6f0;font-weight:600">'+localBy+'</span></div>':'')
+      +'</div>'
+      +'<div id="sync-gate-status" style="font-family:monospace;font-size:0.8rem;color:#9e9bc0;margin-bottom:1rem">⏳ Verifica aggiornamenti dal server…</div>'
+      +'<div id="sync-gate-bar" style="height:3px;background:#2a2a40;border-radius:2px;overflow:hidden;margin-bottom:1rem">'
+      +'<div id="sync-gate-progress" style="height:100%;width:0%;background:#f0602a;transition:width 0.3s;border-radius:2px"></div>'
+      +'</div>'
+      +'<button id="sync-gate-btn" style="display:none;background:#f0602a;color:#fff;border:none;padding:0.7rem 2rem;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer;width:100%" onclick="syncGateProceed()">Entra →</button>';
+  }
+
+  // Animate progress bar
+  var prog=0;
+  var barInterval=setInterval(function(){
+    prog=Math.min(prog+2, 85);
+    var el=document.getElementById('sync-gate-progress');
+    if(el) el.style.width=prog+'%';
+  }, 60);
+
+  // Do the actual cloud load
+  cloudLoad(true, function(){
+    clearInterval(barInterval);
+    var barEl=document.getElementById('sync-gate-progress');
+    if(barEl) barEl.style.width='100%';
+
+    // Get cloud version info
+    var cloudTs = S && S.updatedAt ? new Date(S.updatedAt) : null;
+    var cloudBy = S && S._lastSavedBy ? S._lastSavedBy : '—';
+    var statusEl=document.getElementById('sync-gate-status');
+    if(statusEl){
+      if(cloudTs){
+        statusEl.innerHTML='<span style="color:#4ade80;font-size:1rem">✓</span> Aggiornato al <span style="color:#4ade80;font-weight:700">'+fmtDate(cloudTs)+'</span>'
+          +(cloudBy&&cloudBy!=='—'?'<br>salvato da <span style="color:#e8e6f0;font-weight:600">'+cloudBy+'</span>':'');
+      } else {
+        statusEl.innerHTML='<span style="color:#4ade80">✓</span> Dati caricati dal server';
+      }
+    }
+    var btnEl=document.getElementById('sync-gate-btn');
+    if(btnEl) btnEl.style.display='block';
+
+    // Save last_saved_by to localStorage for next login
+    if(cloudBy&&cloudBy!=='—'){
+      try{ localStorage.setItem('ppz_last_saved_by', cloudBy); }catch(e){}
+    }
+
+    window._syncGateDoUpdate = doUpdate;
+  });
+}
+
+function syncGateProceed(){
   var gate=document.getElementById('pwd-gate');
   if(gate) gate.remove();
-  bootApp();
+  // Boot without another cloudLoad (already done in showSyncGate)
+  load();
+  migrateCategories();
+  calGoToday();
+  showView('calendario');
+  CURRENT_USER=getCurrentUser();
+  var uEl=document.getElementById('hdr-user');
+  if(uEl) uEl.textContent='👤 '+(CURRENT_USER||'—');
+  render();
+  // Start polling
+  if(window.firebase_firestore){
+    setTimeout(migrateFromMain, 2000);
+    setInterval(function(){
+      var loadPaused = window._syncPaused && Date.now() < window._syncPaused;
+      var panelOpen = editingId || (document.getElementById('overlay').classList.contains('open'));
+      if(!panelOpen && !loadPaused) cloudLoad(true);
+      if(currentView==='deliverable') renderDeliverables();
+    }, 30000);
+  }
+  // Start inactivity timer
+  startInactivityTimer();
+  if(window._syncGateDoUpdate){
+    setTimeout(function(){ showView('lavorazione'); aggiornaDaTesto(); }, 500);
+  }
 }
 
 function submitPassword(){
@@ -8493,15 +8636,18 @@ function bootApp(){
         gate.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center';
         document.body.appendChild(gate);
         showUserSelector();
+      } else {
+        // Already logged in: start inactivity timer
+        startInactivityTimer();
+        setInterval(function(){
+          var loadPaused = window._syncPaused && Date.now() < window._syncPaused;
+          var panelOpen = editingId || (document.getElementById('overlay').classList.contains('open'));
+          if(!panelOpen && !loadPaused) cloudLoad(true);
+          if(currentView==='deliverable') renderDeliverables();
+        }, 30000);
       }
     });
     setTimeout(migrateFromMain, 2000);
-    setInterval(function(){
-      var loadPaused = window._syncPaused && Date.now() < window._syncPaused;
-      var panelOpen = editingId || (document.getElementById('overlay').classList.contains('open'));
-      if(!panelOpen && !loadPaused) cloudLoad(true);
-      if(currentView==='deliverable') renderDeliverables();
-    }, 30000);
   } else {
     render();
   }
