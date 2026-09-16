@@ -8481,8 +8481,12 @@ function showSyncGate(name, doUpdate){
     if(el) el.style.width=prog+'%';
   }, 60);
 
-  // Do the actual cloud load
-  cloudLoad(true, function(){
+  // Do the actual cloud load — wait for Firebase if not ready yet
+  function doCloudLoadWhenReady(){
+    if(!window.firebase_firestore||typeof firebase==='undefined'){
+      setTimeout(doCloudLoadWhenReady, 200); return;
+    }
+    cloudLoad(true, function(){
     clearInterval(barInterval);
     var barEl=document.getElementById('sync-gate-progress');
     if(barEl) barEl.style.width='100%';
@@ -8508,7 +8512,9 @@ function showSyncGate(name, doUpdate){
     }
 
     window._syncGateDoUpdate = doUpdate;
-  });
+    });
+  }
+  doCloudLoadWhenReady();
 }
 
 function syncGateProceed(){
