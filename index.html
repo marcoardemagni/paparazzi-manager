@@ -2631,9 +2631,10 @@ function generateBandierina(secId){
     if(statusEl) statusEl.textContent='';
     var text=(data.content&&data.content[0]&&data.content[0].text)||'';
     var clean=text.replace(/```json|```/g,'').trim();
+    var jmA=clean.match(/\{[\s\S]*\}/); if(jmA) clean=jmA[0];
     var parsed;
     try{ parsed=JSON.parse(clean); }
-    catch(e){ if(statusEl) statusEl.textContent='Errore parsing JSON. Riprova.'; return; }
+    catch(e){ console.error('Parse error:',e); if(statusEl) statusEl.textContent='Errore parsing JSON. Riprova.'; return; }
     var dirs=parsed.direzioni||[];
     if(!dirs.length){ if(statusEl) statusEl.textContent='Nessuna direzione generata.'; return; }
     if(!sec.script.bandierina) sec.script.bandierina={};
@@ -2950,7 +2951,8 @@ function generaTestoMeteo(secId){
     if(st) st.textContent='';
     var text=(data.content&&data.content[0]&&data.content[0].text)||'';
     var clean=text.replace(/```json|```/g,'').trim();
-    var parsed; try{ parsed=JSON.parse(clean); }catch(e){ if(st) st.textContent='Errore parsing.'; return; }
+    var jm2=clean.match(/\{[\s\S]*\}/); if(jm2) clean=jm2[0];
+    var parsed; try{ parsed=JSON.parse(clean); }catch(e){ console.error('Parse error:',e); if(st) st.textContent='Errore parsing.'; return; }
     var lines=(parsed.dialogo||[]).map(function(l){ return l.chi+': '+l.testo; });
     var dialogo=lines.join('\n\n');
     if(!sec.script.temperature) sec.script.temperature={};
@@ -3153,9 +3155,10 @@ function generaProposteTrending(){
     if(btn) btn.disabled=false;
     var text=(data.content&&data.content[0]&&data.content[0].text)||'';
     var clean=text.replace(/```json|```/g,'').trim();
+    var jmB=clean.match(/\{[\s\S]*\}/); if(jmB) clean=jmB[0];
     var parsed;
     try{ parsed=JSON.parse(clean); }
-    catch(e){ if(st) st.textContent='Errore parsing. Riprova.'; return; }
+    catch(e){ console.error('Parse error:',e); if(st) st.textContent='Errore parsing. Riprova.'; return; }
     renderProposte(parsed.proposte||[]);
   })
   .catch(function(){
@@ -3605,9 +3608,16 @@ function generaDialogoTrending(secId){
       if(st) st.textContent='';
       var text=(data.content&&data.content[0]&&data.content[0].text)||'';
       var clean=text.replace(/```json|```/g,'').trim();
+      // Try to extract JSON even if surrounded by extra text
+      var jsonMatch=clean.match(/\{[\s\S]*\}/);
+      if(jsonMatch) clean=jsonMatch[0];
       var parsed;
       try{ parsed=JSON.parse(clean); }
-      catch(e){ if(st) st.textContent='Errore parsing. Riprova.'; return; }
+      catch(e){
+        console.error('Parse error:', e, 'Raw response:', text.slice(0,300));
+        if(st) st.textContent='Errore parsing. Riprova.';
+        return;
+      }
       var lines=(parsed.dialogo||[]).map(function(l){
         if(l.chi==='RVM') return 'RVM: '+l.testo;
         return l.chi+': '+l.testo;
@@ -3701,9 +3711,10 @@ function generaIntervista(secId){
       if(st) st.textContent='';
       var text=(data.content&&data.content[0]&&data.content[0].text)||'';
       var clean=text.replace(/```json|```/g,'').trim();
+      var jm3=clean.match(/\{[\s\S]*\}/); if(jm3) clean=jm3[0];
       var parsed;
       try{ parsed=JSON.parse(clean); }
-      catch(e){ if(st) st.textContent='Errore parsing. Riprova.'; return; }
+      catch(e){ console.error('Parse error:',e,'Raw:',text.slice(0,200)); if(st) st.textContent='Errore parsing. Riprova.'; return; }
       var lines=(parsed.intervista||[]).map(function(l){ return l.chi+': '+l.testo; });
       var testo=lines.join('\n\n');
       if(!sec.script) sec.script={};
