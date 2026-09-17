@@ -986,7 +986,7 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v18.1 – 2026-09-16';
+var APP_VERSION='v18.2 – 2026-09-17';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
 document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('hdr-version');
