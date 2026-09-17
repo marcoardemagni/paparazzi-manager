@@ -1065,7 +1065,21 @@ function callClaude(payload){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
-  }).then(function(r){ return r.json(); });
+  }).then(function(r){
+    if(!r.ok){
+      return r.text().then(function(t){
+        console.error('Netlify function error:', r.status, t.slice(0,200));
+        throw new Error('HTTP '+r.status+': '+t.slice(0,100));
+      });
+    }
+    return r.json();
+  }).then(function(data){
+    if(data.error){
+      console.error('Claude API error:', JSON.stringify(data.error));
+      throw new Error(data.error.message||'Claude API error');
+    }
+    return data;
+  });
 }
 
 function fetchArticle(url){
