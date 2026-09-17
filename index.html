@@ -986,7 +986,7 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v18.2 – 2026-09-17';
+var APP_VERSION='v18.3 – 2026-09-17';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
 document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('hdr-version');
@@ -1098,25 +1098,29 @@ var _screenshots = {};
 
 function loadScreenshot(input, idx){
   var file=input.files[0]; if(!file) return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var dataUrl=e.target.result;
-    var base64=dataUrl.split(',')[1];
-    // Detect media type from dataUrl header (more reliable than file.type)
-    var mimeMatch=dataUrl.match(/^data:([^;]+);/);
-    var mediaType=mimeMatch?mimeMatch[1]:(file.type||'image/jpeg');
-    // Normalise: only jpeg/png/gif/webp are supported by Claude
-    if(mediaType==='image/jpg') mediaType='image/jpeg';
-    _screenshots[idx]={base64:base64, mediaType:mediaType, dataUrl:dataUrl};
-    var preview=document.getElementById('url-img-preview-'+idx);
-    if(preview) preview.innerHTML='<img src="'+dataUrl+'" style="max-width:100%;max-height:120px;border-radius:4px;margin-top:4px">';
-    // Clear fallback textarea since we have an image
-    var ta=document.getElementById('url-text-'+idx); if(ta) ta.value='';
-    // Update status
-    var s=document.getElementById('url-status-'+idx);
-    if(s) s.innerHTML='<span style="color:#4ade80">✓ screenshot</span>';
+  // Read as ArrayBuffer first to detect PNG magic bytes
+  var sniffer=new FileReader();
+  sniffer.onload=function(ev){
+    var arr=new Uint8Array(ev.target.result);
+    // PNG: 89 50 4E 47 | WEBP: 52 49 46 46 | GIF: 47 49 46 38
+    var mediaType='image/jpeg';
+    if(arr[0]===0x89&&arr[1]===0x50&&arr[2]===0x4E&&arr[3]===0x47) mediaType='image/png';
+    else if(arr[0]===0x47&&arr[1]===0x49&&arr[2]===0x46) mediaType='image/gif';
+    else if(arr[0]===0x52&&arr[1]===0x49&&arr[2]===0x46&&arr[3]===0x46) mediaType='image/webp';
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var dataUrl=e.target.result;
+      var base64=dataUrl.split(',')[1];
+      _screenshots[idx]={base64:base64, mediaType:mediaType, dataUrl:dataUrl};
+      var preview=document.getElementById('url-img-preview-'+idx);
+      if(preview) preview.innerHTML='<img src="'+dataUrl+'" style="max-width:100%;max-height:120px;border-radius:4px;margin-top:4px">';
+      var ta=document.getElementById('url-text-'+idx); if(ta) ta.value='';
+      var s=document.getElementById('url-status-'+idx);
+      if(s) s.innerHTML='<span style="color:#4ade80">✓ screenshot ('+mediaType+')</span>';
+    };
+    reader.readAsDataURL(file);
   };
-  reader.readAsDataURL(file);
+  sniffer.readAsArrayBuffer(file.slice(0,4));
 }
 
 function mostraConflictsDialog(conflictItems, docRef, mergedData, ts){
