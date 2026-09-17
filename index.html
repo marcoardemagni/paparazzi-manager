@@ -986,7 +986,7 @@ function typeBorderColor(type){ return TYPE_BORDER_COLORS[type]||'#555'; }
 function goToday(){ currentDay=todayIso(); renderDayView(); }
 
 function load(){ try{ const r=localStorage.getItem('ppz_v2'); if(r) S=JSON.parse(r); }catch(e){} }
-var APP_VERSION='v18.4 – 2026-09-17';
+var APP_VERSION='v18.5 – 2026-09-17';
 console.log('%c PAPARAZZI! MGR '+APP_VERSION+' ', 'background:#f0602a;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px');
 document.addEventListener('DOMContentLoaded', function(){
   var el=document.getElementById('hdr-version');
@@ -7744,6 +7744,9 @@ function copiaRigaExcelOspite(g, overlay){
   var email=overlay.querySelector('#osp-email')&&overlay.querySelector('#osp-email').value||g.email||'';
   var noteLogistiche=g.noteLogistiche||'';
   var noteCopione=overlay.querySelector('#osp-note-cop')&&overlay.querySelector('#osp-note-cop').value||g.noteCopione||'';
+  var secNome=overlay.querySelector('#osp-sec-nome')&&overlay.querySelector('#osp-sec-nome').value||g.secNome||'';
+  var secTel=overlay.querySelector('#osp-sec-telefono')&&overlay.querySelector('#osp-sec-telefono').value||g.secTelefono||'';
+  var secEmail=overlay.querySelector('#osp-sec-email')&&overlay.querySelector('#osp-sec-email').value||g.secEmail||'';
 
   // Find episode number from assignment
   var epSec=S.sections.find(function(s){ return s.assignment&&s.assignment.date===day&&s.type==='ospite'&&((s.script&&s.script.ospiteRef&&s.script.ospiteRef.nome||s.title||'').toLowerCase()===nome.toLowerCase()); });
@@ -7770,8 +7773,9 @@ function copiaRigaExcelOspite(g, overlay){
     '',                              // 4 Contact
     fmtDateIT(prodDay),              // 5 Prod Day
     clean(nome),                     // 6 Guest
-    g.abituale?'Sì':'No',            // 7 Abituale
-    clean(sottopancia).slice(0,50),  // 8 Sottopancia (max 50)
+    [clean(secNome),secTel?"'"+ clean(secTel):'',clean(secEmail)].filter(Boolean).join(' '), // 7 Secondo contatto
+    g.abituale?'Sì':'No',            // 8 Abituale
+    clean(sottopancia).slice(0,50),  // 9 Sottopancia (max 50)
     clean(location),                 // 9 Studio/Remote
     clean(daDove),                   // 10 Se remote, da dove
     clean(accompagnatori),           // 11 Accompagnatori
